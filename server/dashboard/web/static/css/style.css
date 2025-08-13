@@ -1,0 +1,241 @@
+/* CryoSpy Dashboard Styles */
+/* "Arctic Cyberspace" Dark Theme */
+
+:root {
+    --primary-color: #0D1B2A; /* Dark Blue */
+    --secondary-color: #1B263B; /* Darker Blue */
+    --accent-color: #415A77; /* Grey Blue */
+    --text-color: #E0E1DD; /* Light Grey */
+    --highlight-color: #00f2ff; /* Cyan Highlight */
+    --error-color: #ff4d4d;
+    --success-color: #4dff4d;
+
+    --font-family: 'Roboto', sans-serif;
+    --header-font: 'Orbitron', sans-serif;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap');
+
+body {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    font-family: var(--font-family);
+    margin: 0;
+    padding: 0;
+    font-weight: 300;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+header {
+    background-color: var(--secondary-color);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--accent-color);
+}
+
+header h1 {
+    font-family: var(--header-font);
+    color: var(--highlight-color);
+    margin: 0;
+    font-size: 2rem;
+    text-shadow: 0 0 5px var(--highlight-color);
+}
+
+nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+}
+
+nav li {
+    margin-left: 2rem;
+}
+
+nav a {
+    color: var(--text-color);
+    text-decoration: none;
+    font-size: 1.1rem;
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+nav a:hover, nav a.active {
+    color: var(--highlight-color);
+    text-shadow: 0 0 3px var(--highlight-color);
+}
+
+h2 {
+    font-family: var(--header-font);
+    color: var(--highlight-color);
+    border-bottom: 1px solid var(--accent-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.btn {
+    background-color: var(--accent-color);
+    color: var(--text-color);
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.btn:hover {
+    background-color: #5A7A9A;
+    box-shadow: 0 0 10px var(--highlight-color);
+}
+
+.btn-danger {
+    background-color: #8B0000;
+}
+
+.btn-danger:hover {
+    background-color: #A52A2A;
+    box-shadow: 0 0 10px var(--error-color);
+}
+
+.error {
+    color: var(--error-color);
+    background-color: rgba(255, 77, 77, 0.1);
+    padding: 1rem;
+    border-left: 3px solid var(--error-color);
+    margin-bottom: 1rem;
+}
+
+.success {
+    color: var(--success-color);
+    background-color: rgba(77, 255, 77, 0.1);
+    padding: 1rem;
+    border-left: 3px solid var(--success-color);
+    margin-bottom: 1rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select {
+    width: 100%;
+    padding: 0.75rem;
+    background-color: var(--secondary-color);
+    border: 1px solid var(--accent-color);
+    border-radius: 5px;
+    color: var(--text-color);
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+
+input[type="checkbox"] {
+    margin-right: 0.5rem;
+}
+
+.client-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 2rem;
+}
+
+.client-card {
+    background-color: var(--secondary-color);
+    border: 1px solid var(--accent-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.client-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2), 0 0 15px rgba(0, 242, 255, 0.3);
+}
+
+.client-card h3 {
+    font-family: var(--header-font);
+    margin-top: 0;
+    color: var(--highlight-color);
+    word-break: break-all;
+}
+
+.client-card .form-group {
+    margin-bottom: 1rem;
+}
+
+.client-card .actions {
+    margin-top: auto;
+    padding-top: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.form-group.checkbox-group {
+    display: flex;
+    align-items: center;
+}
+
+.form-group.checkbox-group label {
+    display: inline;
+    margin-bottom: 0;
+    margin-left: 0.5rem;
+    order: 2; /* Puts label after checkbox */
+}
+
+.form-group.checkbox-group input[type="checkbox"] {
+    order: 1; /* Puts checkbox before label */
+    width: auto;
+}
+
+.form-container {
+    background-color: var(--secondary-color);
+    padding: 2rem;
+    border-radius: 8px;
+    max-width: 600px;
+}
+
+.secret-display {
+    background-color: var(--primary-color);
+    padding: 1rem;
+    border-radius: 5px;
+    margin-top: 1rem;
+}
+
+.secret-display code {
+    word-break: break-all;
+    color: var(--highlight-color);
+}
+
+.login-container {
+    max-width: 400px;
+    margin: 5rem auto;
+    padding: 2rem;
+    background-color: var(--secondary-color);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.login-container h2 {
+    border-bottom: none;
+}

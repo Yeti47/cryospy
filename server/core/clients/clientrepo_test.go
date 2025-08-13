@@ -38,6 +38,10 @@ func createTestClient() *Client {
 		EncryptedMek:          "encryptedMekValue789",
 		KeyDerivationSalt:     "keyDerivationSalt012",
 		StorageLimitMegabytes: 1024,
+		ClipDurationSeconds:   30,
+		MotionOnly:            true,
+		Grayscale:             false,
+		DownscaleResolution:   "480p",
 	}
 }
 
@@ -88,6 +92,18 @@ func TestSQLiteClientRepository_Create(t *testing.T) {
 	if retrieved.StorageLimitMegabytes != client.StorageLimitMegabytes {
 		t.Errorf("Expected StorageLimitMegabytes %d, got %d", client.StorageLimitMegabytes, retrieved.StorageLimitMegabytes)
 	}
+	if retrieved.ClipDurationSeconds != client.ClipDurationSeconds {
+		t.Errorf("Expected ClipDurationSeconds %d, got %d", client.ClipDurationSeconds, retrieved.ClipDurationSeconds)
+	}
+	if retrieved.MotionOnly != client.MotionOnly {
+		t.Errorf("Expected MotionOnly %v, got %v", client.MotionOnly, retrieved.MotionOnly)
+	}
+	if retrieved.Grayscale != client.Grayscale {
+		t.Errorf("Expected Grayscale %v, got %v", client.Grayscale, retrieved.Grayscale)
+	}
+	if retrieved.DownscaleResolution != client.DownscaleResolution {
+		t.Errorf("Expected DownscaleResolution %s, got %s", client.DownscaleResolution, retrieved.DownscaleResolution)
+	}
 }
 
 func TestSQLiteClientRepository_GetByID_NotFound(t *testing.T) {
@@ -124,6 +140,10 @@ func TestSQLiteClientRepository_GetAll(t *testing.T) {
 			EncryptedMek:          "mek1",
 			KeyDerivationSalt:     "kds1",
 			StorageLimitMegabytes: 512,
+			ClipDurationSeconds:   60,
+			MotionOnly:            false,
+			Grayscale:             true,
+			DownscaleResolution:   "720p",
 		},
 		{
 			ID:                    "client-2",
@@ -134,6 +154,10 @@ func TestSQLiteClientRepository_GetAll(t *testing.T) {
 			EncryptedMek:          "mek2",
 			KeyDerivationSalt:     "kds2",
 			StorageLimitMegabytes: 1024,
+			ClipDurationSeconds:   120,
+			MotionOnly:            true,
+			Grayscale:             false,
+			DownscaleResolution:   "",
 		},
 		{
 			ID:                    "client-3",
@@ -144,6 +168,10 @@ func TestSQLiteClientRepository_GetAll(t *testing.T) {
 			EncryptedMek:          "mek3",
 			KeyDerivationSalt:     "kds3",
 			StorageLimitMegabytes: 2048,
+			ClipDurationSeconds:   15,
+			MotionOnly:            false,
+			Grayscale:             false,
+			DownscaleResolution:   "360p",
 		},
 	}
 
@@ -189,6 +217,10 @@ func TestSQLiteClientRepository_Update(t *testing.T) {
 	client.EncryptedMek = "newEncryptedMek"
 	client.KeyDerivationSalt = "newKeyDerivationSalt"
 	client.StorageLimitMegabytes = 2048
+	client.ClipDurationSeconds = 10
+	client.MotionOnly = false
+	client.Grayscale = true
+	client.DownscaleResolution = "1080p"
 	client.UpdatedAt = time.Now().UTC()
 
 	err = repo.Update(ctx, client)
@@ -216,6 +248,18 @@ func TestSQLiteClientRepository_Update(t *testing.T) {
 	}
 	if retrieved.StorageLimitMegabytes != 2048 {
 		t.Errorf("Expected updated StorageLimitMegabytes 2048, got %d", retrieved.StorageLimitMegabytes)
+	}
+	if retrieved.ClipDurationSeconds != 10 {
+		t.Errorf("Expected updated ClipDurationSeconds 10, got %d", retrieved.ClipDurationSeconds)
+	}
+	if retrieved.MotionOnly != false {
+		t.Errorf("Expected updated MotionOnly false, got %v", retrieved.MotionOnly)
+	}
+	if retrieved.Grayscale != true {
+		t.Errorf("Expected updated Grayscale true, got %v", retrieved.Grayscale)
+	}
+	if retrieved.DownscaleResolution != "1080p" {
+		t.Errorf("Expected updated DownscaleResolution '1080p', got %s", retrieved.DownscaleResolution)
 	}
 	// CreatedAt should remain unchanged
 	if !retrieved.CreatedAt.Equal(client.CreatedAt) {
@@ -309,6 +353,10 @@ func TestSQLiteClientRepository_TimeConversion(t *testing.T) {
 		EncryptedMek:          "mek",
 		KeyDerivationSalt:     "kds",
 		StorageLimitMegabytes: 1024,
+		ClipDurationSeconds:   60,
+		MotionOnly:            true,
+		Grayscale:             false,
+		DownscaleResolution:   "",
 	}
 
 	err := repo.Create(ctx, client)

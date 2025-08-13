@@ -83,6 +83,9 @@ func main() {
 	// Set up Gin engine
 	router := gin.Default()
 
+	// Serve static files
+	router.Static("/static", "web/static")
+
 	// Set up templates
 	router.HTMLRender = createTemplateRenderer()
 
@@ -117,7 +120,8 @@ func main() {
 			clientGroup.GET("", clientHandler.ListClients)
 			clientGroup.GET("/new", clientHandler.ShowNewClientForm)
 			clientGroup.POST("/new", clientHandler.CreateClient)
-			clientGroup.POST("/delete/:id", clientHandler.DeleteClient)
+			clientGroup.POST("/:id/settings", clientHandler.UpdateClientSettings)
+			clientGroup.POST("/:id/delete", clientHandler.DeleteClient)
 		}
 
 		clipGroup := authedGroup.Group("/clips")

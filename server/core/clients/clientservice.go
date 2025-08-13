@@ -3,25 +3,48 @@ package clients
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"strings"
 	"time"
+
+	"slices"
 
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/encryption"
 )
 
+type CreateClientRequest struct {
+	ID                    string
+	StorageLimitMegabytes int
+	ClipDurationSeconds   int
+	MotionOnly            bool
+	Grayscale             bool
+	DownscaleResolution   string
+}
+
+type UpdateClientSettingsRequest struct {
+	ID                    string
+	StorageLimitMegabytes int
+	ClipDurationSeconds   int
+	MotionOnly            bool
+	Grayscale             bool
+	DownscaleResolution   string
+}
+
+var supportedDownscaleResolutions = []string{"", "360p", "480p", "720p", "1080p"}
+
 type ClientService interface {
 	// CreateClient creates a new client with the given details
-	CreateClient(id string, storageLimitMegabytes int, mekStore encryption.MekStore) (client *Client, secret []byte, err error)
+	CreateClient(req CreateClientRequest, mekStore encryption.MekStore) (client *Client, secret []byte, err error)
 	// GetClient retrieves a client by its ID
 	GetClient(id string) (*Client, error)
 	// GetClients retrieves all clients
 	GetClients() ([]*Client, error)
-	// SetStorageLimit sets the storage limit for a client
-	SetStorageLimit(id string, newLimitMegabytes int) error
+	// UpdateClientSettings updates the settings for a client
+	UpdateClientSettings(req UpdateClientSettingsRequest) error
 	// DeleteClient deletes a client by its ID
 	DeleteClient(id string) error
+	// GetSupportedDownscaleResolutions returns a list of supported downscale resolutions
+	GetSupportedDownscaleResolutions() []string
 }
 
 type clientService struct {
@@ -43,9 +66,31 @@ func NewClientService(logger logging.Logger, repo ClientRepository, encryptor en
 	}
 }
 
-func (s *clientService) CreateClient(id string, storageLimitMegabytes int, mekStore encryption.MekStore) (*Client, []byte, error) {
+func (s *clientService) validateClientSettings(clipDuration int, downscaleResolution string) error {
+	if clipDuration < 30 || clipDuration > 1800 { // 30 minutes = 1800 seconds
+		return NewClientValidationError("clip duration must be between 30 and 1800 seconds")
+	}
+
+	found := slices.Contains(supportedDownscaleResolutions, downscaleResolution)
+
+	if !found {
+		return NewClientValidationError("unsupported downscale resolution")
+	}
+
+	return nil
+}
+
+func (s *clientService) CreateClient(req CreateClientRequest, mekStore encryption.MekStore) (*Client, []byte, error) {
+	if err := s.validateClientSettings(req.ClipDurationSeconds, req.DownscaleResolution); err != nil {
+		return nil, nil, err
+	}
+
 	// trim the id
-	id = strings.TrimSpace(id)
+	id := strings.TrimSpace(req.ID)
+
+	if id == "" {
+		return nil, nil, NewClientValidationError("client ID cannot be empty")
+	}
 
 	s.logger.Info("Creating client", "id", id)
 
@@ -119,7 +164,11 @@ func (s *clientService) CreateClient(id string, storageLimitMegabytes int, mekSt
 		UpdatedAt:             now,
 		EncryptedMek:          base64.StdEncoding.EncodeToString(encryptedMek),
 		KeyDerivationSalt:     base64.StdEncoding.EncodeToString(keyDerivationSalt),
-		StorageLimitMegabytes: storageLimitMegabytes,
+		StorageLimitMegabytes: req.StorageLimitMegabytes,
+		ClipDurationSeconds:   req.ClipDurationSeconds,
+		MotionOnly:            req.MotionOnly,
+		Grayscale:             req.Grayscale,
+		DownscaleResolution:   req.DownscaleResolution,
 	}
 
 	// Save the client to the repository
@@ -166,38 +215,44 @@ func (s *clientService) GetClients() ([]*Client, error) {
 	return clients, nil
 }
 
-func (s *clientService) SetStorageLimit(id string, newLimitMegabytes int) error {
-	s.logger.Info("Setting storage limit for client", "id", id, "newLimitMegabytes", newLimitMegabytes)
-
-	// validate the new limit
-	if newLimitMegabytes <= 0 {
-		s.logger.Error("Invalid storage limit", "id", id, "newLimitMegabytes", newLimitMegabytes)
-		return fmt.Errorf("invalid storage limit: %d", newLimitMegabytes)
+func (s *clientService) UpdateClientSettings(req UpdateClientSettingsRequest) error {
+	if err := s.validateClientSettings(req.ClipDurationSeconds, req.DownscaleResolution); err != nil {
+		return err
 	}
+
+	s.logger.Info("Updating client settings", "id", req.ID)
 
 	ctx := context.Background()
 
 	// Retrieve the client by ID
-	client, err := s.repo.GetByID(ctx, id)
+	client, err := s.repo.GetByID(ctx, req.ID)
 	if err != nil {
 		s.logger.Error("Failed to retrieve client", err)
 		return err
 	}
 	if client == nil {
-		s.logger.Info("Client not found", "id", id)
+		s.logger.Info("Client not found", "id", req.ID)
 		return nil // No error if the client does not exist
 	}
 
-	// Update the storage limit
-	client.StorageLimitMegabytes = newLimitMegabytes
+	// Update the settings
+	client.StorageLimitMegabytes = req.StorageLimitMegabytes
+	client.ClipDurationSeconds = req.ClipDurationSeconds
+	client.MotionOnly = req.MotionOnly
+	client.Grayscale = req.Grayscale
+	client.DownscaleResolution = req.DownscaleResolution
 	client.UpdatedAt = time.Now().UTC()
 
 	if err := s.repo.Update(ctx, client); err != nil {
-		s.logger.Error("Failed to update client storage limit", err)
+		s.logger.Error("Failed to update client settings", err)
 		return err
 	}
 
 	return nil
+}
+
+func (s *clientService) GetSupportedDownscaleResolutions() []string {
+	return supportedDownscaleResolutions
 }
 
 func (s *clientService) DeleteClient(id string) error {

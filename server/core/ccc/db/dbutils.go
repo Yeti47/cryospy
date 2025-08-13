@@ -50,6 +50,37 @@ func TimePtrToString(t *time.Time) *string {
 	return &result
 }
 
+// AddColumn adds a new column to a table if it doesn't exist
+func AddColumn(db *sql.DB, tableName, columnName, columnType string) error {
+	// Check if the column already exists
+	rows, err := db.Query("PRAGMA table_info(" + tableName + ")")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var type_ string
+		var notnull int
+		var dflt_value interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &type_, &notnull, &dflt_value, &pk); err != nil {
+			return err
+		}
+		if name == columnName {
+			// Column already exists
+			return nil
+		}
+	}
+
+	// Column does not exist, so add it
+	query := "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnType
+	_, err = db.Exec(query)
+	return err
+}
+
 // NewInMemoryDB creates a new in-memory SQLite database for testing
 func NewInMemoryDB() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", ":memory:")

@@ -1,27 +1,53 @@
 {{ define "content" }}
 <h2>Create New Client</h2>
-{{ if .Error }}
-<p class="error">{{ .Error }}</p>
-{{ end }}
+
 {{ if .Client }}
-<div>
+<div class="form-container">
     <h3>Client Created Successfully</h3>
     <p><strong>ID:</strong> {{ .Client.ID }}</p>
-    <p><strong>Secret:</strong> <code>{{ .Secret }}</code></p>
-    <p>Please save the secret. It will not be shown again.</p>
-    <a href="/clients" class="btn">Back to Clients</a>
+    <div class="secret-display">
+        <p><strong>Secret:</strong></p>
+        <code>{{ .Secret }}</code>
+        <p><small>Please save the secret. It will not be shown again.</small></p>
+    </div>
+    <a href="/clients" class="btn" style="margin-top: 1rem;">Back to Clients</a>
 </div>
 {{ else }}
-<form action="/clients/new" method="post">
-    <div class="form-group">
-        <label for="id">Client ID</label>
-        <input type="text" id="id" name="id" required>
-    </div>
-    <div class="form-group">
-        <label for="storage_limit">Storage Limit (MB)</label>
-        <input type="number" id="storage_limit" name="storage_limit" value="1024" required>
-    </div>
-    <button type="submit" class="btn">Create Client</button>
-</form>
+<div class="form-container">
+    {{ if .Error }}
+    <p class="error">{{ .Error }}</p>
+    {{ end }}
+    <form action="/clients/new" method="post">
+        <div class="form-group">
+            <label for="id">Client ID</label>
+            <input type="text" id="id" name="id" required>
+        </div>
+        <div class="form-group">
+            <label for="storage_limit">Storage Limit (MB)</label>
+            <input type="number" id="storage_limit" name="storage_limit" value="1024" required>
+        </div>
+        <div class="form-group">
+            <label for="clip_duration">Clip Duration (seconds)</label>
+            <input type="number" id="clip_duration" name="clip_duration" value="60" required min="30" max="1800">
+        </div>
+        <div class="form-group">
+            <label for="downscale_resolution">Downscale Resolution</label>
+            <select id="downscale_resolution" name="downscale_resolution">
+                {{ range .SupportedResolutions }}
+                <option value="{{ . }}">{{ if eq . "" }}None{{ else }}{{ . }}{{ end }}</option>
+                {{ end }}
+            </select>
+        </div>
+        <div class="form-group checkbox-group">
+            <input type="checkbox" id="motion_only" name="motion_only">
+            <label for="motion_only">Motion Only</label>
+        </div>
+        <div class="form-group checkbox-group">
+            <input type="checkbox" id="grayscale" name="grayscale">
+            <label for="grayscale">Grayscale</label>
+        </div>
+        <button type="submit" class="btn">Create Client</button>
+    </form>
+</div>
 {{ end }}
 {{ end }}

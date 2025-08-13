@@ -1,18 +1,20 @@
 {{ define "content" }}
-<h2>Setup Master Encryption Key</h2>
-<p>No Master Encryption Key (MEK) found. Please create one to secure your system.</p>
-{{ if .Error }}
-<p class="error">{{ .Error }}</p>
-{{ end }}
-<form action="/auth/setup" method="post">
-    <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required>
-    </div>
-    <div class="form-group">
-        <label for="confirm_password">Confirm Password</label>
-        <input type="password" id="confirm_password" name="confirm_password" required>
-    </div>
-    <button type="submit" class="btn">Create MEK</button>
-</form>
+<div class="login-container">
+    <h2>Setup Master Encryption Key</h2>
+    <p>No Master Encryption Key (MEK) found. Please create one to secure your system.</p>
+    {{ if .Error }}
+    <p class="error">{{ .Error }}</p>
+    {{ end }}
+    <form action="/auth/setup" method="post">
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+            <label for="confirm_password">Confirm Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" required>
+        </div>
+        <button type="submit" class="btn">Create MEK</button>
+    </form>
+</div>
 {{ end }}

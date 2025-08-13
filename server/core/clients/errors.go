@@ -13,6 +13,10 @@ type ClientVerificationError struct {
 	ClientID string
 }
 
+type ClientValidationError struct {
+	Message string
+}
+
 func (e *ClientAlreadyExistsError) Error() string {
 	return "Client already exists: " + e.ID
 }
@@ -23,6 +27,10 @@ func (e *ClientNotFoundError) Error() string {
 
 func (e *ClientVerificationError) Error() string {
 	return "Client verification failed for ID: " + e.ClientID
+}
+
+func (e *ClientValidationError) Error() string {
+	return "Client validation failed: " + e.Message
 }
 
 // helper functions for error handling
@@ -37,6 +45,11 @@ func IsClientNotFoundError(err error) bool {
 	return ok
 }
 
+func IsClientValidationError(err error) bool {
+	_, ok := err.(*ClientValidationError)
+	return ok
+}
+
 // helper function to create a new ClientAlreadyExistsError
 func NewClientAlreadyExistsError(id string) error {
 	return &ClientAlreadyExistsError{ID: id}
@@ -48,4 +61,8 @@ func NewClientNotFoundError(id string) error {
 
 func NewClientVerificationError(clientID string) error {
 	return &ClientVerificationError{ClientID: clientID}
+}
+
+func NewClientValidationError(message string) error {
+	return &ClientValidationError{Message: message}
 }

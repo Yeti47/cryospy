@@ -1,34 +1,51 @@
 {{ define "content" }}
 <h2>Clients</h2>
 <a href="/clients/new" class="btn">New Client</a>
-{{ if .Clients }}
-<table>
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Storage Limit (MB)</th>
-            <th>Created At</th>
-            <th>Updated At</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {{ range .Clients }}
-        <tr>
-            <td>{{ .ID }}</td>
-            <td>{{ .StorageLimitMegabytes }}</td>
-            <td>{{ .CreatedAt.Format "2006-01-02 15:04:05" }}</td>
-            <td>{{ .UpdatedAt.Format "2006-01-02 15:04:05" }}</td>
-            <td>
-                <form action="/clients/delete/{{ .ID }}" method="post" style="display:inline;">
-                    <button type="submit" onclick="return confirm('Are you sure you want to delete client \'{{ .ID }}\'?');">Delete</button>
-                </form>
-            </td>
-        </tr>
-        {{ end }}
-    </tbody>
-</table>
-{{ else }}
+{{ if .Error }}
+<p class="error">{{ .Error }}</p>
+{{ end }}
+<div class="client-grid">
+    {{ range .Clients }}
+    <div class="client-card">
+        <h3>{{ .ID }}</h3>
+        <form action="/clients/{{ .ID }}/settings" method="post" id="settings-form-{{ .ID }}">
+            <div class="form-group">
+                <label for="storage_limit_{{ .ID }}">Storage Limit (MB)</label>
+                <input type="number" id="storage_limit_{{ .ID }}" name="storage_limit" value="{{ .StorageLimitMegabytes }}" required>
+            </div>
+            <div class="form-group">
+                <label for="clip_duration_{{ .ID }}">Clip Duration (s)</label>
+                <input type="number" id="clip_duration_{{ .ID }}" name="clip_duration" value="{{ .ClipDurationSeconds }}" required min="30" max="1800">
+            </div>
+            <div class="form-group">
+                <label for="downscale_resolution_{{ .ID }}">Downscale</label>
+                <select id="downscale_resolution_{{ .ID }}" name="downscale_resolution">
+                    {{ $currentResolution := .DownscaleResolution }}
+                    {{ range $.SupportedResolutions }}
+                    <option value="{{ . }}" {{ if eq . $currentResolution }}selected{{ end }}>{{ if eq . "" }}None{{ else }}{{ . }}{{ end }}</option>
+                    {{ end }}
+                </select>
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="motion_only_{{ .ID }}" name="motion_only" {{ if .MotionOnly }}checked{{ end }}>
+                <label for="motion_only_{{ .ID }}">Motion Only</label>
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="grayscale_{{ .ID }}" name="grayscale" {{ if .Grayscale }}checked{{ end }}>
+                <label for="grayscale_{{ .ID }}">Grayscale</label>
+            </div>
+        </form>
+        <div class="actions">
+            <button type="submit" class="btn" form="settings-form-{{ .ID }}">Save</button>
+            <form action="/clients/{{ .ID }}/delete" method="post" style="display:inline;">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete client \'{{ .ID }}\'?');">Delete</button>
+            </form>
+        </div>
+        <small>Created: {{ .CreatedAt.Format "2006-01-02 15:04:05" }}<br>Updated: {{ .UpdatedAt.Format "2006-01-02 15:04:05" }}</small>
+    </div>
+    {{ end }}
+</div>
+{{ if not .Clients }}
 <p>No clients found.</p>
 {{ end }}
 {{ end }}

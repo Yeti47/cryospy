@@ -48,17 +48,32 @@ func (r *SQLiteClientRepository) createTables() error {
 		updated_at TEXT NOT NULL,
 		encrypted_mek TEXT NOT NULL,
 		key_derivation_salt TEXT NOT NULL,
-		storage_limit_megabytes INTEGER NOT NULL
+		storage_limit_megabytes INTEGER NOT NULL,
+		clip_duration_seconds INTEGER NOT NULL DEFAULT 60,
+		motion_only INTEGER NOT NULL DEFAULT 0,
+		grayscale INTEGER NOT NULL DEFAULT 0,
+		downscale_resolution TEXT NOT NULL DEFAULT ''
 	);`
 
 	_, err := r.db.Exec(createClientsTable)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Add new columns if they don't exist, to support migration from older versions
+	db.AddColumn(r.db, "clients", "clip_duration_seconds", "INTEGER NOT NULL DEFAULT 60")
+	db.AddColumn(r.db, "clients", "motion_only", "INTEGER NOT NULL DEFAULT 0")
+	db.AddColumn(r.db, "clients", "grayscale", "INTEGER NOT NULL DEFAULT 0")
+	db.AddColumn(r.db, "clients", "downscale_resolution", "TEXT NOT NULL DEFAULT ''")
+
+	return nil
 }
 
 // GetByID retrieves a Client by its ID
 func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Client, error) {
 	query := `
-	SELECT id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes
+	SELECT id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes,
+		clip_duration_seconds, motion_only, grayscale, downscale_resolution
 	FROM clients WHERE id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -68,6 +83,7 @@ func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Clien
 	err := row.Scan(
 		&client.ID, &client.SecretHash, &client.SecretSalt, &createdAtStr, &updatedAtStr,
 		&client.EncryptedMek, &client.KeyDerivationSalt, &client.StorageLimitMegabytes,
+		&client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -93,7 +109,8 @@ func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Clien
 // GetAll retrieves all Clients
 func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) {
 	query := `
-	SELECT id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes
+	SELECT id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes,
+		clip_duration_seconds, motion_only, grayscale, downscale_resolution
 	FROM clients ORDER BY created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, query)
@@ -109,6 +126,7 @@ func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) 
 		err := rows.Scan(
 			&client.ID, &client.SecretHash, &client.SecretSalt, &createdAtStr, &updatedAtStr,
 			&client.EncryptedMek, &client.KeyDerivationSalt, &client.StorageLimitMegabytes,
+			&client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan client: %w", err)
@@ -134,13 +152,15 @@ func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) 
 // Create adds a new Client to the repository
 func (r *SQLiteClientRepository) Create(ctx context.Context, client *Client) error {
 	query := `
-	INSERT INTO clients (id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	INSERT INTO clients (id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes,
+		clip_duration_seconds, motion_only, grayscale, downscale_resolution)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.ExecContext(ctx, query,
 		client.ID, client.SecretHash, client.SecretSalt,
 		db.TimeToString(client.CreatedAt), db.TimeToString(client.UpdatedAt),
 		client.EncryptedMek, client.KeyDerivationSalt, client.StorageLimitMegabytes,
+		client.ClipDurationSeconds, client.MotionOnly, client.Grayscale, client.DownscaleResolution,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -154,12 +174,14 @@ func (r *SQLiteClientRepository) Update(ctx context.Context, client *Client) err
 	query := `
 	UPDATE clients 
 	SET secret_hash = ?, secret_salt = ?, updated_at = ?, encrypted_mek = ?, 
-		key_derivation_salt = ?, storage_limit_megabytes = ?
+		key_derivation_salt = ?, storage_limit_megabytes = ?,
+		clip_duration_seconds = ?, motion_only = ?, grayscale = ?, downscale_resolution = ?
 	WHERE id = ?`
 
 	result, err := r.db.ExecContext(ctx, query,
 		client.SecretHash, client.SecretSalt, db.TimeToString(client.UpdatedAt),
 		client.EncryptedMek, client.KeyDerivationSalt, client.StorageLimitMegabytes,
+		client.ClipDurationSeconds, client.MotionOnly, client.Grayscale, client.DownscaleResolution,
 		client.ID,
 	)
 	if err != nil {
