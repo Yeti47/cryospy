@@ -734,3 +734,354 @@ func TestSQLiteClipRepository_Pagination(t *testing.T) {
 		t.Error("Motion clips not ordered correctly with pagination")
 	}
 }
+
+func TestSQLiteClipRepository_GetTotalStorageUsage(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Test with no clips (should return 0)
+	totalUsage, err := repo.GetTotalStorageUsage(ctx, "client-empty")
+	if err != nil {
+		t.Fatalf("Failed to get storage usage for empty client: %v", err)
+	}
+
+	if totalUsage != 0 {
+		t.Errorf("Expected 0 bytes for empty client, got %d", totalUsage)
+	}
+
+	// Add clips with different sizes for multiple clients
+	now := time.Now().UTC()
+	clips := []*Clip{
+		{
+			ID:                 "client-a-clip-1",
+			ClientID:           "client-a",
+			Title:              "Client A Clip 1",
+			TimeStamp:          now.Add(-2 * time.Hour),
+			Duration:           time.Duration(30 * time.Second),
+			HasMotion:          true,
+			EncryptedVideo:     make([]byte, 1024*1024), // 1MB
+			VideoWidth:         1920,
+			VideoHeight:        1080,
+			VideoMimeType:      "video/mp4",
+			EncryptedThumbnail: []byte("thumb-a1"),
+			ThumbnailWidth:     320,
+			ThumbnailHeight:    240,
+			ThumbnailMimeType:  "image/jpeg",
+		},
+		{
+			ID:                 "client-a-clip-2",
+			ClientID:           "client-a",
+			Title:              "Client A Clip 2",
+			TimeStamp:          now.Add(-1 * time.Hour),
+			Duration:           time.Duration(45 * time.Second),
+			HasMotion:          false,
+			EncryptedVideo:     make([]byte, 2*1024*1024), // 2MB
+			VideoWidth:         1280,
+			VideoHeight:        720,
+			VideoMimeType:      "video/mp4",
+			EncryptedThumbnail: []byte("thumb-a2"),
+			ThumbnailWidth:     256,
+			ThumbnailHeight:    144,
+			ThumbnailMimeType:  "image/png",
+		},
+		{
+			ID:                 "client-b-clip-1",
+			ClientID:           "client-b",
+			Title:              "Client B Clip 1",
+			TimeStamp:          now,
+			Duration:           time.Duration(60 * time.Second),
+			HasMotion:          true,
+			EncryptedVideo:     make([]byte, 3*1024*1024), // 3MB
+			VideoWidth:         1920,
+			VideoHeight:        1080,
+			VideoMimeType:      "video/mp4",
+			EncryptedThumbnail: []byte("thumb-b1"),
+			ThumbnailWidth:     320,
+			ThumbnailHeight:    240,
+			ThumbnailMimeType:  "image/jpeg",
+		},
+	}
+
+	// Fill video data with different patterns to ensure they're different sizes
+	for i, clip := range clips {
+		for j := range clip.EncryptedVideo {
+			clip.EncryptedVideo[j] = byte((i + j) % 256)
+		}
+	}
+
+	for _, clip := range clips {
+		err := repo.Add(ctx, clip)
+		if err != nil {
+			t.Fatalf("Failed to add clip %s: %v", clip.ID, err)
+		}
+	}
+
+	// Test client-a usage (1MB + 2MB = 3MB)
+	clientAUsage, err := repo.GetTotalStorageUsage(ctx, "client-a")
+	if err != nil {
+		t.Fatalf("Failed to get storage usage for client-a: %v", err)
+	}
+
+	expectedClientAUsage := int64(3 * 1024 * 1024) // 3MB
+	if clientAUsage != expectedClientAUsage {
+		t.Errorf("Expected %d bytes for client-a, got %d", expectedClientAUsage, clientAUsage)
+	}
+
+	// Test client-b usage (3MB)
+	clientBUsage, err := repo.GetTotalStorageUsage(ctx, "client-b")
+	if err != nil {
+		t.Fatalf("Failed to get storage usage for client-b: %v", err)
+	}
+
+	expectedClientBUsage := int64(3 * 1024 * 1024) // 3MB
+	if clientBUsage != expectedClientBUsage {
+		t.Errorf("Expected %d bytes for client-b, got %d", expectedClientBUsage, clientBUsage)
+	}
+
+	// Test non-existent client (should return 0)
+	nonExistentUsage, err := repo.GetTotalStorageUsage(ctx, "non-existent-client")
+	if err != nil {
+		t.Fatalf("Failed to get storage usage for non-existent client: %v", err)
+	}
+
+	if nonExistentUsage != 0 {
+		t.Errorf("Expected 0 bytes for non-existent client, got %d", nonExistentUsage)
+	}
+
+	// Delete one clip and verify usage is updated
+	err = repo.Delete(ctx, "client-a-clip-1")
+	if err != nil {
+		t.Fatalf("Failed to delete clip: %v", err)
+	}
+
+	clientAUsageAfterDelete, err := repo.GetTotalStorageUsage(ctx, "client-a")
+	if err != nil {
+		t.Fatalf("Failed to get storage usage for client-a after delete: %v", err)
+	}
+
+	expectedClientAUsageAfterDelete := int64(2 * 1024 * 1024) // 2MB (only clip-2 remains)
+	if clientAUsageAfterDelete != expectedClientAUsageAfterDelete {
+		t.Errorf("Expected %d bytes for client-a after delete, got %d", expectedClientAUsageAfterDelete, clientAUsageAfterDelete)
+	}
+}
+
+func TestSQLiteClipRepository_GetOldestClips(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Test with no clips (should return empty slice)
+	oldestClips, err := repo.GetOldestClips(ctx, "client-empty", 5)
+	if err != nil {
+		t.Fatalf("Failed to get oldest clips for empty client: %v", err)
+	}
+
+	if len(oldestClips) != 0 {
+		t.Errorf("Expected 0 clips for empty client, got %d", len(oldestClips))
+	}
+
+	// Add clips with different timestamps for multiple clients
+	baseTime := time.Now().UTC().Add(-10 * time.Hour)
+	clips := []*Clip{
+		{
+			ID:                 "client-a-oldest",
+			ClientID:           "client-a",
+			Title:              "Client A Oldest",
+			TimeStamp:          baseTime, // Oldest
+			Duration:           time.Duration(30 * time.Second),
+			HasMotion:          true,
+			EncryptedVideo:     []byte("video-a-oldest"),
+			VideoWidth:         1920,
+			VideoHeight:        1080,
+			VideoMimeType:      "video/mp4",
+			EncryptedThumbnail: []byte("thumb-a-oldest"),
+			ThumbnailWidth:     320,
+			ThumbnailHeight:    240,
+			ThumbnailMimeType:  "image/jpeg",
+		},
+		{
+			ID:                 "client-a-middle",
+			ClientID:           "client-a",
+			Title:              "Client A Middle",
+			TimeStamp:          baseTime.Add(2 * time.Hour), // Middle
+			Duration:           time.Duration(45 * time.Second),
+			HasMotion:          false,
+			EncryptedVideo:     []byte("video-a-middle"),
+			VideoWidth:         1280,
+			VideoHeight:        720,
+			VideoMimeType:      "video/mp4",
+			EncryptedThumbnail: []byte("thumb-a-middle"),
+			ThumbnailWidth:     256,
+			ThumbnailHeight:    144,
+			ThumbnailMimeType:  "image/png",
+		},
+		{
+			ID:                 "client-a-newest",
+			ClientID:           "client-a",
+			Title:              "Client A Newest",
+			TimeStamp:          baseTime.Add(4 * time.Hour), // Newest
+			Duration:           time.Duration(60 * time.Second),
+			HasMotion:          true,
+			EncryptedVideo:     []byte("video-a-newest"),
+			VideoWidth:         1920,
+			VideoHeight:        1080,
+			VideoMimeType:      "video/mp4",
+			EncryptedThumbnail: []byte("thumb-a-newest"),
+			ThumbnailWidth:     320,
+			ThumbnailHeight:    240,
+			ThumbnailMimeType:  "image/jpeg",
+		},
+		{
+			ID:                 "client-b-only",
+			ClientID:           "client-b",
+			Title:              "Client B Only",
+			TimeStamp:          baseTime.Add(1 * time.Hour),
+			Duration:           time.Duration(50 * time.Second),
+			HasMotion:          true,
+			EncryptedVideo:     []byte("video-b-only"),
+			VideoWidth:         1920,
+			VideoHeight:        1080,
+			VideoMimeType:      "video/mp4",
+			EncryptedThumbnail: []byte("thumb-b-only"),
+			ThumbnailWidth:     320,
+			ThumbnailHeight:    240,
+			ThumbnailMimeType:  "image/jpeg",
+		},
+	}
+
+	for _, clip := range clips {
+		err := repo.Add(ctx, clip)
+		if err != nil {
+			t.Fatalf("Failed to add clip %s: %v", clip.ID, err)
+		}
+	}
+
+	// Test getting 1 oldest clip for client-a
+	oldestOne, err := repo.GetOldestClips(ctx, "client-a", 1)
+	if err != nil {
+		t.Fatalf("Failed to get 1 oldest clip for client-a: %v", err)
+	}
+
+	if len(oldestOne) != 1 {
+		t.Errorf("Expected 1 oldest clip, got %d", len(oldestOne))
+	}
+
+	if oldestOne[0].ID != "client-a-oldest" {
+		t.Errorf("Expected oldest clip to be 'client-a-oldest', got '%s'", oldestOne[0].ID)
+	}
+
+	// Verify the timestamp is correctly parsed
+	if !oldestOne[0].TimeStamp.Equal(baseTime) {
+		t.Errorf("Expected timestamp %v, got %v", baseTime, oldestOne[0].TimeStamp)
+	}
+
+	// Verify other fields are correctly loaded
+	if oldestOne[0].ClientID != "client-a" {
+		t.Errorf("Expected ClientID 'client-a', got '%s'", oldestOne[0].ClientID)
+	}
+	if oldestOne[0].Title != "Client A Oldest" {
+		t.Errorf("Expected Title 'Client A Oldest', got '%s'", oldestOne[0].Title)
+	}
+	if oldestOne[0].HasMotion != true {
+		t.Errorf("Expected HasMotion true, got %v", oldestOne[0].HasMotion)
+	}
+
+	// Test getting 2 oldest clips for client-a
+	oldestTwo, err := repo.GetOldestClips(ctx, "client-a", 2)
+	if err != nil {
+		t.Fatalf("Failed to get 2 oldest clips for client-a: %v", err)
+	}
+
+	if len(oldestTwo) != 2 {
+		t.Errorf("Expected 2 oldest clips, got %d", len(oldestTwo))
+	}
+
+	// Should be ordered by timestamp ASC: oldest, middle
+	if oldestTwo[0].ID != "client-a-oldest" || oldestTwo[1].ID != "client-a-middle" {
+		t.Errorf("Expected clips ordered oldest->middle, got %s->%s", oldestTwo[0].ID, oldestTwo[1].ID)
+	}
+
+	// Test getting all clips for client-a
+	allOldest, err := repo.GetOldestClips(ctx, "client-a", 10)
+	if err != nil {
+		t.Fatalf("Failed to get all oldest clips for client-a: %v", err)
+	}
+
+	if len(allOldest) != 3 {
+		t.Errorf("Expected 3 clips for client-a, got %d", len(allOldest))
+	}
+
+	// Should be ordered by timestamp ASC: oldest, middle, newest
+	expectedOrder := []string{"client-a-oldest", "client-a-middle", "client-a-newest"}
+	for i, clip := range allOldest {
+		if clip.ID != expectedOrder[i] {
+			t.Errorf("Expected clip %d to be '%s', got '%s'", i, expectedOrder[i], clip.ID)
+		}
+	}
+
+	// Test client-b (only 1 clip)
+	clientBOldest, err := repo.GetOldestClips(ctx, "client-b", 5)
+	if err != nil {
+		t.Fatalf("Failed to get oldest clips for client-b: %v", err)
+	}
+
+	if len(clientBOldest) != 1 {
+		t.Errorf("Expected 1 clip for client-b, got %d", len(clientBOldest))
+	}
+
+	if clientBOldest[0].ID != "client-b-only" {
+		t.Errorf("Expected 'client-b-only', got '%s'", clientBOldest[0].ID)
+	}
+
+	// Test non-existent client
+	nonExistentOldest, err := repo.GetOldestClips(ctx, "non-existent-client", 5)
+	if err != nil {
+		t.Fatalf("Failed to get oldest clips for non-existent client: %v", err)
+	}
+
+	if len(nonExistentOldest) != 0 {
+		t.Errorf("Expected 0 clips for non-existent client, got %d", len(nonExistentOldest))
+	}
+
+	// Test limit of 0
+	zeroLimit, err := repo.GetOldestClips(ctx, "client-a", 0)
+	if err != nil {
+		t.Fatalf("Failed to get oldest clips with limit 0: %v", err)
+	}
+
+	if len(zeroLimit) != 0 {
+		t.Errorf("Expected 0 clips with limit 0, got %d", len(zeroLimit))
+	}
+
+	// Test that clips are properly isolated by client
+	// Delete client-a clips and verify client-b is unaffected
+	for _, clipID := range []string{"client-a-oldest", "client-a-middle", "client-a-newest"} {
+		err = repo.Delete(ctx, clipID)
+		if err != nil {
+			t.Fatalf("Failed to delete clip %s: %v", clipID, err)
+		}
+	}
+
+	// Client-a should now have no clips
+	clientAAfterDelete, err := repo.GetOldestClips(ctx, "client-a", 5)
+	if err != nil {
+		t.Fatalf("Failed to get oldest clips for client-a after delete: %v", err)
+	}
+
+	if len(clientAAfterDelete) != 0 {
+		t.Errorf("Expected 0 clips for client-a after delete, got %d", len(clientAAfterDelete))
+	}
+
+	// Client-b should still have its clip
+	clientBAfterDelete, err := repo.GetOldestClips(ctx, "client-b", 5)
+	if err != nil {
+		t.Fatalf("Failed to get oldest clips for client-b after deleting client-a clips: %v", err)
+	}
+
+	if len(clientBAfterDelete) != 1 {
+		t.Errorf("Expected 1 clip for client-b after deleting client-a clips, got %d", len(clientBAfterDelete))
+	}
+}

@@ -26,21 +26,21 @@ type ClipCreator interface {
 
 type clipCreator struct {
 	logger             logging.Logger
-	clipRepo           ClipRepository
+	storageManager     StorageManager
 	encryptor          encryption.Encryptor
 	mekProvider        clients.ClientMekProvider
 	metadataExtractor  VideoMetadataExtractor
 	thumbnailGenerator ThumbnailGenerator
 }
 
-func NewClipCreator(logger logging.Logger, clipRepo ClipRepository, encryptor encryption.Encryptor, mekProvider clients.ClientMekProvider, metadataExtractor VideoMetadataExtractor, thumbnailGenerator ThumbnailGenerator) *clipCreator {
+func NewClipCreator(logger logging.Logger, storageManager StorageManager, encryptor encryption.Encryptor, mekProvider clients.ClientMekProvider, metadataExtractor VideoMetadataExtractor, thumbnailGenerator ThumbnailGenerator) *clipCreator {
 	if logger == nil {
 		logger = logging.NopLogger
 	}
 
 	return &clipCreator{
 		logger:             logger,
-		clipRepo:           clipRepo,
+		storageManager:     storageManager,
 		encryptor:          encryptor,
 		mekProvider:        mekProvider,
 		metadataExtractor:  metadataExtractor,
@@ -134,9 +134,9 @@ func (s *clipCreator) CreateClip(req CreateClipRequest, clientID, clientSecret s
 	}
 
 	// Save clip to repository
-	err = s.clipRepo.Add(context.Background(), clip)
+	err = s.storageManager.StoreClip(context.Background(), clip)
 	if err != nil {
-		s.logger.Error("Failed to save clip", err)
+		s.logger.Error("Failed to save clip", "error", err)
 		return nil, err
 	}
 

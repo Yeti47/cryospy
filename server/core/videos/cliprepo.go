@@ -32,6 +32,12 @@ type ClipRepository interface {
 
 	// GetThumbnailByID retrieves the thumbnail data with metadata for a Clip by its ID
 	GetThumbnailByID(ctx context.Context, id string) (*Thumbnail, error)
+
+	// GetTotalStorageUsage retrieves the total storage usage for a client's clips
+	GetTotalStorageUsage(ctx context.Context, clientID string) (int64, error)
+
+	// GetOldestClips retrieves the oldest clips for a client, limited by the specified count
+	GetOldestClips(ctx context.Context, clientID string, limit int) ([]*Clip, error)
 }
 
 // SQLiteClipRepository implements ClipRepository using SQLite
@@ -346,4 +352,59 @@ func (r *SQLiteClipRepository) buildQuerySQL(query ClipQuery, metadataOnly bool)
 	}
 
 	return sqlQuery, args
+}
+
+func (r *SQLiteClipRepository) GetTotalStorageUsage(ctx context.Context, clientID string) (int64, error) {
+	const query = `SELECT SUM(LENGTH(encrypted_video)) FROM clips WHERE client_id = ?`
+	var totalSize sql.NullInt64
+	err := r.db.QueryRowContext(ctx, query, clientID).Scan(&totalSize)
+	if err != nil {
+		return 0, err
+	}
+	return totalSize.Int64, nil
+}
+
+func (r *SQLiteClipRepository) GetOldestClips(ctx context.Context, clientID string, limit int) ([]*Clip, error) {
+	const query = `SELECT id, client_id, title, timestamp, duration, has_motion, video_width, video_height, video_mime_type, thumbnail_width, thumbnail_height, thumbnail_mime_type FROM clips WHERE client_id = ? ORDER BY timestamp ASC LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, query, clientID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clips []*Clip
+	for rows.Next() {
+		var clip Clip
+		var timestampStr string
+		var durationNanos int64
+		var hasMotionInt int
+		err := rows.Scan(
+			&clip.ID,
+			&clip.ClientID,
+			&clip.Title,
+			&timestampStr,
+			&durationNanos,
+			&hasMotionInt,
+			&clip.VideoWidth,
+			&clip.VideoHeight,
+			&clip.VideoMimeType,
+			&clip.ThumbnailWidth,
+			&clip.ThumbnailHeight,
+			&clip.ThumbnailMimeType,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert string timestamp back to time.Time
+		clip.TimeStamp, err = db.StringToTime(timestampStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timestamp: %w", err)
+		}
+
+		clip.Duration = time.Duration(durationNanos)
+		clip.HasMotion = db.IntToBool(hasMotionInt)
+		clips = append(clips, &clip)
+	}
+	return clips, nil
 }
