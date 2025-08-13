@@ -27,13 +27,13 @@ type mekService struct {
 	encryptor Encryptor
 }
 
-func NewMekService(logger logging.Logger, repo MekRepository, encryptor Encryptor) mekService {
+func NewMekService(logger logging.Logger, repo MekRepository, encryptor Encryptor) *mekService {
 
 	if logger == nil {
 		logger = logging.NopLogger
 	}
 
-	return mekService{
+	return &mekService{
 		logger:    logger,
 		repo:      repo,
 		encryptor: encryptor,

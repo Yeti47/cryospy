@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/encryption"
 )
@@ -30,13 +30,13 @@ type clientService struct {
 	encryptor encryption.Encryptor
 }
 
-func NewClientService(logger logging.Logger, repo ClientRepository, encryptor encryption.Encryptor) clientService {
+func NewClientService(logger logging.Logger, repo ClientRepository, encryptor encryption.Encryptor) *clientService {
 
 	if logger == nil {
 		logger = logging.NopLogger
 	}
 
-	return clientService{
+	return &clientService{
 		logger:    logger,
 		repo:      repo,
 		encryptor: encryptor,
@@ -44,6 +44,9 @@ func NewClientService(logger logging.Logger, repo ClientRepository, encryptor en
 }
 
 func (s *clientService) CreateClient(id string, storageLimitMegabytes int, mekStore encryption.MekStore) (*Client, []byte, error) {
+	// trim the id
+	id = strings.TrimSpace(id)
+
 	s.logger.Info("Creating client", "id", id)
 
 	ctx := context.Background()
@@ -109,7 +112,7 @@ func (s *clientService) CreateClient(id string, storageLimitMegabytes int, mekSt
 
 	// creat the client
 	client := &Client{
-		ID:                    uuid.NewString(),
+		ID:                    id,
 		SecretHash:            hashedSecretBase64,
 		SecretSalt:            saltBase64,
 		CreatedAt:             now,

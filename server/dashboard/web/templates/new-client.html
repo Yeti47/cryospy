@@ -1,0 +1,27 @@
+{{ define "content" }}
+<h2>Create New Client</h2>
+{{ if .Error }}
+<p class="error">{{ .Error }}</p>
+{{ end }}
+{{ if .Client }}
+<div>
+    <h3>Client Created Successfully</h3>
+    <p><strong>ID:</strong> {{ .Client.ID }}</p>
+    <p><strong>Secret:</strong> <code>{{ .Secret }}</code></p>
+    <p>Please save the secret. It will not be shown again.</p>
+    <a href="/clients" class="btn">Back to Clients</a>
+</div>
+{{ else }}
+<form action="/clients/new" method="post">
+    <div class="form-group">
+        <label for="id">Client ID</label>
+        <input type="text" id="id" name="id" required>
+    </div>
+    <div class="form-group">
+        <label for="storage_limit">Storage Limit (MB)</label>
+        <input type="number" id="storage_limit" name="storage_limit" value="1024" required>
+    </div>
+    <button type="submit" class="btn">Create Client</button>
+</form>
+{{ end }}
+{{ end }}

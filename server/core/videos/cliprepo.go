@@ -336,14 +336,13 @@ func (r *SQLiteClipRepository) buildQuerySQL(query ClipQuery, metadataOnly bool)
 	sqlQuery += " ORDER BY timestamp DESC"
 
 	// Add pagination if specified
-	if query.Limit != nil {
+	if query.PageSize > 0 {
 		sqlQuery += " LIMIT ?"
-		args = append(args, *query.Limit)
-	}
-
-	if query.Offset != nil {
-		sqlQuery += " OFFSET ?"
-		args = append(args, *query.Offset)
+		args = append(args, query.PageSize)
+		if query.Page > 1 {
+			sqlQuery += " OFFSET ?"
+			args = append(args, (query.Page-1)*query.PageSize)
+		}
 	}
 
 	return sqlQuery, args

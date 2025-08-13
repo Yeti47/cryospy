@@ -646,15 +646,14 @@ func TestSQLiteClipRepository_Pagination(t *testing.T) {
 		}
 	}
 
-	// Test pagination with limit only
-	limit := 3
-	paginatedClips, totalCount, err := repo.Query(ctx, ClipQuery{Limit: &limit})
+	// Test pagination: Page 1, PageSize 3
+	paginatedClips, totalCount, err := repo.Query(ctx, ClipQuery{Page: 1, PageSize: 3})
 	if err != nil {
-		t.Fatalf("Failed to query with limit: %v", err)
+		t.Fatalf("Failed to query with pagination (page 1): %v", err)
 	}
 
 	if len(paginatedClips) != 3 {
-		t.Errorf("Expected 3 clips with limit, got %d", len(paginatedClips))
+		t.Errorf("Expected 3 clips on page 1, got %d", len(paginatedClips))
 	}
 
 	if totalCount != 5 {
@@ -663,52 +662,40 @@ func TestSQLiteClipRepository_Pagination(t *testing.T) {
 
 	// Verify order (newest first) - should be clip-5, clip-4, clip-3
 	if paginatedClips[0].ID != "clip-5" || paginatedClips[1].ID != "clip-4" || paginatedClips[2].ID != "clip-3" {
-		t.Error("Clips not ordered correctly with pagination")
+		t.Error("Clips not ordered correctly on page 1")
 	}
 
-	// Test pagination with limit and offset
-	offset := 2
-	offsetClips, totalCount2, err := repo.Query(ctx, ClipQuery{Limit: &limit, Offset: &offset})
+	// Test pagination: Page 2, PageSize 3
+	paginatedClips2, totalCount2, err := repo.Query(ctx, ClipQuery{Page: 2, PageSize: 3})
 	if err != nil {
-		t.Fatalf("Failed to query with limit and offset: %v", err)
+		t.Fatalf("Failed to query with pagination (page 2): %v", err)
 	}
 
-	if len(offsetClips) != 3 {
-		t.Errorf("Expected 3 clips with limit and offset, got %d", len(offsetClips))
+	if len(paginatedClips2) != 2 {
+		t.Errorf("Expected 2 clips on page 2, got %d", len(paginatedClips2))
 	}
 
 	if totalCount2 != 5 {
-		t.Errorf("Expected total count 5 with offset, got %d", totalCount2)
+		t.Errorf("Expected total count 5 on page 2, got %d", totalCount2)
 	}
 
-	// Should be clip-3, clip-2, clip-1
-	if offsetClips[0].ID != "clip-3" || offsetClips[1].ID != "clip-2" || offsetClips[2].ID != "clip-1" {
-		t.Error("Clips not ordered correctly with limit and offset")
+	// Should be clip-2, clip-1
+	if paginatedClips2[0].ID != "clip-2" || paginatedClips2[1].ID != "clip-1" {
+		t.Error("Clips not ordered correctly on page 2")
 	}
 
-	// Test pagination with small limit that should return fewer than limit (at end of results)
-	bigOffset := 4
-	smallLimit := 3
-	endClips, totalCount3, err := repo.Query(ctx, ClipQuery{Limit: &smallLimit, Offset: &bigOffset})
+	// Test pagination with a page that should be empty
+	paginatedClips3, _, err := repo.Query(ctx, ClipQuery{Page: 3, PageSize: 3})
 	if err != nil {
-		t.Fatalf("Failed to query at end of results: %v", err)
+		t.Fatalf("Failed to query with pagination (page 3): %v", err)
 	}
 
-	if len(endClips) != 1 {
-		t.Errorf("Expected 1 clip at end of results, got %d", len(endClips))
-	}
-
-	if totalCount3 != 5 {
-		t.Errorf("Expected total count 5 at end of results, got %d", totalCount3)
-	}
-
-	if endClips[0].ID != "clip-1" {
-		t.Errorf("Expected clip-1 at end of results, got %s", endClips[0].ID)
+	if len(paginatedClips3) != 0 {
+		t.Errorf("Expected 0 clips on page 3, got %d", len(paginatedClips3))
 	}
 
 	// Test QueryInfo with pagination
-	infoLimit := 2
-	clipInfos, infoTotalCount, err := repo.QueryInfo(ctx, ClipQuery{Limit: &infoLimit})
+	clipInfos, infoTotalCount, err := repo.QueryInfo(ctx, ClipQuery{Page: 1, PageSize: 2})
 	if err != nil {
 		t.Fatalf("Failed to query clip info with pagination: %v", err)
 	}
@@ -728,8 +715,7 @@ func TestSQLiteClipRepository_Pagination(t *testing.T) {
 
 	// Test that pagination works with filters
 	hasMotion := true
-	motionLimit := 2
-	motionClips, motionTotalCount, err := repo.Query(ctx, ClipQuery{HasMotion: &hasMotion, Limit: &motionLimit})
+	motionClips, motionTotalCount, err := repo.Query(ctx, ClipQuery{HasMotion: &hasMotion, Page: 1, PageSize: 2})
 	if err != nil {
 		t.Fatalf("Failed to query motion clips with pagination: %v", err)
 	}
@@ -742,7 +728,8 @@ func TestSQLiteClipRepository_Pagination(t *testing.T) {
 		t.Errorf("Expected total count 3 for motion clips, got %d", motionTotalCount)
 	}
 
-	// Should be clip-4, clip-3 (newest motion clips first)
+	// Motion clips are clip-1, clip-3, clip-4. Ordered by time: clip-4, clip-3, clip-1
+	// Page 1, size 2 should be clip-4, clip-3
 	if motionClips[0].ID != "clip-4" || motionClips[1].ID != "clip-3" {
 		t.Error("Motion clips not ordered correctly with pagination")
 	}

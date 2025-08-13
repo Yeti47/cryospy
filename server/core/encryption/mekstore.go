@@ -8,4 +8,6 @@ type MekStore interface {
 	GetMek() ([]byte, error)
 	// SetMek sets the MEK for the authenticated admin user
 	SetMek(mek []byte) error
+	// ClearMek removes the MEK for the authenticated admin user
+	ClearMek() error
 }

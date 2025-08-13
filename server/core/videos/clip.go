@@ -43,8 +43,8 @@ type ClipQuery struct {
 	StartTime *time.Time
 	EndTime   *time.Time
 	HasMotion *bool // nil means no filter, true/false means filter by motion
-	Limit     *int  // maximum number of records to return (nil means no limit)
-	Offset    *int  // number of records to skip (nil means no offset)
+	Page      int   // page number for pagination
+	PageSize  int   // number of records per page
 }
 
 // DecryptedClip represents a clip with decrypted video and thumbnail data

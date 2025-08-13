@@ -1,0 +1,48 @@
+{{ define "content" }}
+<h2>Clips</h2>
+{{ if .Clips }}
+<table>
+    <thead>
+        <tr>
+            <th>Thumbnail</th>
+            <th>Title</th>
+            <th>Client ID</th>
+            <th>Timestamp</th>
+            <th>Duration</th>
+            <th>Has Motion</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{ range .Clips }}
+        <tr>
+            <td>
+                <a href="/clips/{{ .ID }}/video">
+                    <img src="/clips/{{ .ID }}/thumbnail" alt="Thumbnail for clip {{ .ID }}" width="160">
+                </a>
+            </td>
+            <td>{{ .Title }}</td>
+            <td>{{ .ClientID }}</td>
+            <td>{{ .TimeStamp.Format "2006-01-02 15:04:05" }}</td>
+            <td>{{ .Duration }}s</td>
+            <td>{{ .HasMotion }}</td>
+        </tr>
+        {{ end }}
+    </tbody>
+</table>
+
+<div class="pagination">
+    {{ if gt .Page 1 }}
+        <a href="/clips?page={{ .Page | add -1 }}&pageSize={{ .PageSize }}">&laquo; Previous</a>
+    {{ end }}
+
+    <span>Page {{ .Page }} of {{ .TotalPages }}</span>
+
+    {{ if lt .Page .TotalPages }}
+        <a href="/clips?page={{ .Page | add 1 }}&pageSize={{ .PageSize }}">Next &raquo;</a>
+    {{ end }}
+</div>
+
+{{ else }}
+<p>No clips found.</p>
+{{ end }}
+{{ end }}

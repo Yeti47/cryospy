@@ -69,9 +69,6 @@ config.yaml
 config.yml
 *.config
 
-# Session files
-sessions/
-
 # Coverage reports
 coverage.out
 coverage.html
