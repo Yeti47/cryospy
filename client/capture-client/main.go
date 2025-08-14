@@ -315,10 +315,8 @@ func (app *CaptureApp) settingsChanged(old, new *models.ClientSettings) bool {
 	if old == nil || new == nil {
 		return true
 	}
-
-	return old.ID != new.ID ||
-		old.StorageLimitMegabytes != new.StorageLimitMegabytes ||
-		old.ClipDurationSeconds != new.ClipDurationSeconds ||
+	// Compare all relevant fields (we don't care about the ID and the storage capacity here)
+	return old.ClipDurationSeconds != new.ClipDurationSeconds ||
 		old.MotionOnly != new.MotionOnly ||
 		old.Grayscale != new.Grayscale ||
 		old.DownscaleResolution != new.DownscaleResolution
