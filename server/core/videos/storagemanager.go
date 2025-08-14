@@ -17,27 +17,32 @@ type StorageManager interface {
 }
 
 type storageManager struct {
-	logger     logging.Logger
-	clipRepo   ClipRepository
-	clientRepo clients.ClientRepository
-	notifier   notifications.StorageNotifier
+	logger         logging.Logger
+	clipRepo       ClipRepository
+	clientRepo     clients.ClientRepository
+	notifier       notifications.StorageNotifier
+	motionNotifier notifications.MotionNotifier
 
 	// Mutex map for per-client storage limit operations only
 	clientStorageMutexes sync.Map // map[string]*sync.Mutex
 }
 
-func NewStorageManager(logger logging.Logger, clipRepo ClipRepository, clientRepo clients.ClientRepository, notifier notifications.StorageNotifier) StorageManager {
+func NewStorageManager(logger logging.Logger, clipRepo ClipRepository, clientRepo clients.ClientRepository, notifier notifications.StorageNotifier, motionNotifier notifications.MotionNotifier) StorageManager {
 	if logger == nil {
 		logger = logging.NopLogger
 	}
 	if notifier == nil {
 		notifier = notifications.NopStorageNotifier
 	}
+	if motionNotifier == nil {
+		motionNotifier = notifications.NopMotionNotifier
+	}
 	return &storageManager{
 		logger:               logger,
 		clipRepo:             clipRepo,
 		clientRepo:           clientRepo,
 		notifier:             notifier,
+		motionNotifier:       motionNotifier,
 		clientStorageMutexes: sync.Map{},
 	}
 }
@@ -62,7 +67,20 @@ func (s *storageManager) StoreClip(ctx context.Context, clip *Clip) error {
 
 	if client.StorageLimitMegabytes <= 0 {
 		s.logger.Info("client has unlimited storage, storing clip directly", "client_id", clip.ClientID)
-		return s.clipRepo.Add(ctx, clip)
+		err := s.clipRepo.Add(ctx, clip)
+		if err != nil {
+			return err
+		}
+
+		// Send motion notification if clip has motion
+		if clip.HasMotion {
+			err = s.motionNotifier.NotifyMotionDetected(clip.ClientID, clip.Title, clip.TimeStamp)
+			if err != nil {
+				s.logger.Warn("failed to send motion detection notification", "error", err, "client_id", clip.ClientID)
+			}
+		}
+
+		return nil
 	}
 
 	// For clients with storage limits, use a mutex to make storage check-and-store atomic
@@ -131,5 +149,19 @@ func (s *storageManager) StoreClip(ctx context.Context, clip *Clip) error {
 		usageMegaBytes = usageBytes / bytesInMegabyte
 	}
 
-	return s.clipRepo.Add(ctx, clip)
+	// Store the clip
+	err = s.clipRepo.Add(ctx, clip)
+	if err != nil {
+		return err
+	}
+
+	// Send motion notification if clip has motion
+	if clip.HasMotion {
+		err = s.motionNotifier.NotifyMotionDetected(clip.ClientID, clip.Title, clip.TimeStamp)
+		if err != nil {
+			s.logger.Warn("failed to send motion detection notification", "error", err, "client_id", clip.ClientID)
+		}
+	}
+
+	return nil
 }

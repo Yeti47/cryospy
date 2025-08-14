@@ -73,7 +73,33 @@ func (m *mockStorageNotifier) ShouldWarn(usedMegaBytes int64, totalMegaBytes int
 	return result
 }
 
-func setupStorageManagerTest(t *testing.T) (*storageManager, *SQLiteClipRepository, *clients.SQLiteClientRepository, *mockStorageNotifier, func()) {
+// mockMotionNotifier is a test implementation of MotionNotifier
+type mockMotionNotifier struct {
+	motionNotifications []motionNotification
+}
+
+type motionNotification struct {
+	clientID  string
+	clipTitle string
+	timestamp time.Time
+}
+
+func newMockMotionNotifier() *mockMotionNotifier {
+	return &mockMotionNotifier{
+		motionNotifications: make([]motionNotification, 0),
+	}
+}
+
+func (m *mockMotionNotifier) NotifyMotionDetected(clientID string, clipTitle string, timestamp time.Time) error {
+	m.motionNotifications = append(m.motionNotifications, motionNotification{
+		clientID:  clientID,
+		clipTitle: clipTitle,
+		timestamp: timestamp,
+	})
+	return nil
+}
+
+func setupStorageManagerTest(t *testing.T) (*storageManager, *SQLiteClipRepository, *clients.SQLiteClientRepository, *mockStorageNotifier, *mockMotionNotifier, func()) {
 	// Create in-memory database
 	testDB, err := db.NewInMemoryDB()
 	if err != nil {
@@ -93,15 +119,17 @@ func setupStorageManagerTest(t *testing.T) (*storageManager, *SQLiteClipReposito
 		t.Fatalf("Failed to create client repository: %v", err)
 	}
 
-	// Create mock notifier (80% threshold)
-	notifier := newMockStorageNotifier(0.8)
+	// Create mock notifiers
+	storageNotifier := newMockStorageNotifier(0.8) // 80% threshold
+	motionNotifier := newMockMotionNotifier()
 
 	// Create storage manager
 	sm := &storageManager{
 		logger:               logging.NopLogger,
 		clipRepo:             clipRepo,
 		clientRepo:           clientRepo,
-		notifier:             notifier,
+		notifier:             storageNotifier,
+		motionNotifier:       motionNotifier,
 		clientStorageMutexes: sync.Map{},
 	}
 
@@ -109,11 +137,11 @@ func setupStorageManagerTest(t *testing.T) (*storageManager, *SQLiteClipReposito
 		testDB.Close()
 	}
 
-	return sm, clipRepo, clientRepo, notifier, cleanup
+	return sm, clipRepo, clientRepo, storageNotifier, motionNotifier, cleanup
 }
 
 // setupConcurrencyTest creates a test environment with SQLite optimizations for concurrency testing
-func setupConcurrencyTest(t *testing.T) (*storageManager, *SQLiteClipRepository, *clients.SQLiteClientRepository, *mockStorageNotifier, func()) {
+func setupConcurrencyTest(t *testing.T) (*storageManager, *SQLiteClipRepository, *clients.SQLiteClientRepository, *mockStorageNotifier, *mockMotionNotifier, func()) {
 	// Create in-memory database with SQLite optimizations for concurrency
 	// Use shared cache to allow multiple connections to the same in-memory database
 	dbConn, err := sql.Open("sqlite3", "file::memory:?cache=shared&_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache_size=10000")
@@ -139,15 +167,17 @@ func setupConcurrencyTest(t *testing.T) (*storageManager, *SQLiteClipRepository,
 		t.Fatalf("Failed to create client repository: %v", err)
 	}
 
-	// Create mock notifier (80% threshold)
-	notifier := newMockStorageNotifier(0.8)
+	// Create mock notifiers
+	storageNotifier := newMockStorageNotifier(0.8) // 80% threshold
+	motionNotifier := newMockMotionNotifier()
 
 	// Create storage manager
 	sm := &storageManager{
 		logger:               logging.NopLogger,
 		clipRepo:             clipRepo,
 		clientRepo:           clientRepo,
-		notifier:             notifier,
+		notifier:             storageNotifier,
+		motionNotifier:       motionNotifier,
 		clientStorageMutexes: sync.Map{},
 	}
 
@@ -155,7 +185,7 @@ func setupConcurrencyTest(t *testing.T) (*storageManager, *SQLiteClipRepository,
 		dbConn.Close()
 	}
 
-	return sm, clipRepo, clientRepo, notifier, cleanup
+	return sm, clipRepo, clientRepo, storageNotifier, motionNotifier, cleanup
 }
 
 func createTestClientForStorage(id string, storageLimitMB int) *clients.Client {
@@ -202,7 +232,7 @@ func createTestClipForStorage(id, clientID string, videoSizeBytes int) *Clip {
 }
 
 func TestStorageManager_StoreClip_UnlimitedStorage(t *testing.T) {
-	sm, _, clientRepo, notifier, cleanup := setupStorageManagerTest(t)
+	sm, _, clientRepo, notifier, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -232,7 +262,7 @@ func TestStorageManager_StoreClip_UnlimitedStorage(t *testing.T) {
 }
 
 func TestStorageManager_StoreClip_WithinLimits(t *testing.T) {
-	sm, _, clientRepo, notifier, cleanup := setupStorageManagerTest(t)
+	sm, _, clientRepo, notifier, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -259,7 +289,7 @@ func TestStorageManager_StoreClip_WithinLimits(t *testing.T) {
 }
 
 func TestStorageManager_StoreClip_WarningThreshold(t *testing.T) {
-	sm, clipRepo, clientRepo, notifier, cleanup := setupStorageManagerTest(t)
+	sm, clipRepo, clientRepo, notifier, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -312,7 +342,7 @@ func TestStorageManager_StoreClip_WarningThreshold(t *testing.T) {
 }
 
 func TestStorageManager_StoreClip_CapacityExceeded_DeletesOldestClips(t *testing.T) {
-	sm, clipRepo, clientRepo, notifier, cleanup := setupStorageManagerTest(t)
+	sm, clipRepo, clientRepo, notifier, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -402,7 +432,7 @@ func TestStorageManager_StoreClip_CapacityExceeded_DeletesOldestClips(t *testing
 }
 
 func TestStorageManager_StoreClip_CapacityExceeded_NoOldClipsToDelete(t *testing.T) {
-	sm, _, clientRepo, notifier, cleanup := setupStorageManagerTest(t)
+	sm, _, clientRepo, notifier, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -438,7 +468,7 @@ func TestStorageManager_StoreClip_CapacityExceeded_NoOldClipsToDelete(t *testing
 }
 
 func TestStorageManager_StoreClip_ClientNotFound(t *testing.T) {
-	sm, _, _, _, cleanup := setupStorageManagerTest(t)
+	sm, _, _, _, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -453,7 +483,7 @@ func TestStorageManager_StoreClip_ClientNotFound(t *testing.T) {
 }
 
 func TestStorageManager_StoreClip_WarningNotSentWhenCapacityExceeded(t *testing.T) {
-	sm, clipRepo, clientRepo, notifier, cleanup := setupStorageManagerTest(t)
+	sm, clipRepo, clientRepo, notifier, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -495,7 +525,7 @@ func TestStorageManager_StoreClip_WarningNotSentWhenCapacityExceeded(t *testing.
 }
 
 func TestStorageManager_StoreClip_MultipleClipDeletionLoop(t *testing.T) {
-	sm, clipRepo, clientRepo, _, cleanup := setupStorageManagerTest(t)
+	sm, clipRepo, clientRepo, _, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -564,10 +594,10 @@ func TestStorageManager_StoreClip_MultipleClipDeletionLoop(t *testing.T) {
 }
 
 func TestNewStorageManager_WithNilLogger(t *testing.T) {
-	_, clipRepo, clientRepo, _, cleanup := setupStorageManagerTest(t)
+	_, clipRepo, clientRepo, _, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
-	sm := NewStorageManager(nil, clipRepo, clientRepo, nil)
+	sm := NewStorageManager(nil, clipRepo, clientRepo, nil, nil)
 
 	// Verify that the storage manager was created successfully with NopLogger and NopStorageNotifier
 	smImpl := sm.(*storageManager)
@@ -580,7 +610,7 @@ func TestNewStorageManager_WithNilLogger(t *testing.T) {
 }
 
 func TestStorageManager_StoreClip_ExactCapacityLimit(t *testing.T) {
-	sm, _, clientRepo, notifier, cleanup := setupStorageManagerTest(t)
+	sm, _, clientRepo, notifier, _, cleanup := setupStorageManagerTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -616,7 +646,7 @@ func TestStorageManager_StoreClip_ExactCapacityLimit(t *testing.T) {
 }
 
 func TestStorageManager_ConcurrentUploads(t *testing.T) {
-	sm, clipRepo, clientRepo, notifier, cleanup := setupConcurrencyTest(t)
+	sm, clipRepo, clientRepo, notifier, _, cleanup := setupConcurrencyTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -722,7 +752,7 @@ func TestStorageManager_ConcurrentUploadsStressTest(t *testing.T) {
 		t.Skip("Skipping stress test in short mode")
 	}
 
-	sm, clipRepo, clientRepo, _, cleanup := setupConcurrencyTest(t)
+	sm, clipRepo, clientRepo, _, _, cleanup := setupConcurrencyTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -804,7 +834,7 @@ func TestStorageManager_ConcurrentUploadsStressTest(t *testing.T) {
 }
 
 func TestStorageManager_ConcurrentStorageLimitRaceCondition(t *testing.T) {
-	sm, clipRepo, clientRepo, _, cleanup := setupConcurrencyTest(t)
+	sm, clipRepo, clientRepo, _, _, cleanup := setupConcurrencyTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -934,4 +964,61 @@ func TestStorageManager_ConcurrentStorageLimitRaceCondition(t *testing.T) {
 	// Note: It's normal for some "successful" clips to be missing from the database
 	// because cleanup operations from other concurrent uploads may have deleted them.
 	// This is correct behavior - the clip was successfully stored, but later cleaned up.
+}
+
+func TestStorageManager_MotionNotification(t *testing.T) {
+	sm, _, clientRepo, _, motionNotifier, cleanup := setupStorageManagerTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create client with unlimited storage
+	client := createTestClientForStorage("client-motion", 0)
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Create clip with motion
+	clipWithMotion := createTestClipForStorage("clip-with-motion", "client-motion", 1*1024*1024) // 1MB
+	clipWithMotion.HasMotion = true
+	clipWithMotion.Title = "2024-08-14T10-30-00_30s_motion.mp4"
+
+	// Store the clip
+	err = sm.StoreClip(ctx, clipWithMotion)
+	if err != nil {
+		t.Fatalf("Failed to store clip with motion: %v", err)
+	}
+
+	// Verify motion notification was sent
+	if len(motionNotifier.motionNotifications) != 1 {
+		t.Errorf("Expected 1 motion notification, got %d", len(motionNotifier.motionNotifications))
+	} else {
+		notification := motionNotifier.motionNotifications[0]
+		if notification.clientID != "client-motion" {
+			t.Errorf("Expected client ID 'client-motion', got '%s'", notification.clientID)
+		}
+		if notification.clipTitle != clipWithMotion.Title {
+			t.Errorf("Expected clip title '%s', got '%s'", clipWithMotion.Title, notification.clipTitle)
+		}
+		if !notification.timestamp.Equal(clipWithMotion.TimeStamp) {
+			t.Errorf("Expected timestamp %v, got %v", clipWithMotion.TimeStamp, notification.timestamp)
+		}
+	}
+
+	// Create clip without motion
+	clipWithoutMotion := createTestClipForStorage("clip-without-motion", "client-motion", 1*1024*1024) // 1MB
+	clipWithoutMotion.HasMotion = false
+	clipWithoutMotion.Title = "2024-08-14T10-35-00_30s_nomotion.mp4"
+
+	// Store the clip
+	err = sm.StoreClip(ctx, clipWithoutMotion)
+	if err != nil {
+		t.Fatalf("Failed to store clip without motion: %v", err)
+	}
+
+	// Verify no additional motion notification was sent
+	if len(motionNotifier.motionNotifications) != 1 {
+		t.Errorf("Expected still 1 motion notification (no new ones), got %d", len(motionNotifier.motionNotifications))
+	}
 }

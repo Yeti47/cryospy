@@ -9,12 +9,37 @@ import (
 
 // Config holds the configuration for the dashboard and capture server applications
 type Config struct {
-	WebAddr      string `json:"web_addr"`
-	WebPort      int    `json:"web_port"`
-	CapturePort  int    `json:"capture_port"`
-	DatabasePath string `json:"database_path"`
-	LogPath      string `json:"log_path"`
-	LogLevel     string `json:"log_level"`
+	WebAddr                     string                       `json:"web_addr"`
+	WebPort                     int                          `json:"web_port"`
+	CapturePort                 int                          `json:"capture_port"`
+	DatabasePath                string                       `json:"database_path"`
+	LogPath                     string                       `json:"log_path"`
+	LogLevel                    string                       `json:"log_level"`
+	StorageNotificationSettings *StorageNotificationSettings `json:"storage_notification_settings,omitempty"`
+	MotionNotificationSettings  *MotionNotificationSettings  `json:"motion_notification_settings,omitempty"`
+	SMTPSettings                *SMTPSettings                `json:"smtp_settings,omitempty"`
+}
+
+// StorageNotificationSettings holds the configuration for storage notifications
+type StorageNotificationSettings struct {
+	Recipient          string  `json:"recipient"`
+	MinIntervalMinutes int     `json:"min_interval_minutes"`
+	WarningThreshold   float64 `json:"warning_threshold"`
+}
+
+// MotionNotificationSettings holds the configuration for motion notifications
+type MotionNotificationSettings struct {
+	Recipient          string `json:"recipient"`
+	MinIntervalMinutes int    `json:"min_interval_minutes"`
+}
+
+// SMTPSettings holds the configuration for SMTP email sending
+type SMTPSettings struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	FromAddr string `json:"from_addr"`
 }
 
 // DefaultConfig returns a new Config with default values

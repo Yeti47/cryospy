@@ -1,0 +1,24 @@
+{
+  "web_addr": "127.0.0.1",
+  "web_port": 8080,
+  "capture_port": 8081,
+  "database_path": "/home/user/cryospy/cryospy.db",
+  "log_path": "/home/user/cryospy/logs",
+  "log_level": "info",
+  "storage_notification_settings": {
+    "recipient": "admin@example.com",
+    "min_interval_minutes": 60,
+    "warning_threshold": 0.8
+  },
+  "motion_notification_settings": {
+    "recipient": "admin@example.com",
+    "min_interval_minutes": 15
+  },
+  "smtp_settings": {
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "username": "your-email@gmail.com",
+    "password": "your-app-password",
+    "from_addr": "your-email@gmail.com"
+  }
+}

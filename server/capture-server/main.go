@@ -15,6 +15,7 @@ import (
 	"github.com/yeti47/cryospy/server/core/clients"
 	"github.com/yeti47/cryospy/server/core/config"
 	"github.com/yeti47/cryospy/server/core/encryption"
+	"github.com/yeti47/cryospy/server/core/notifications"
 	"github.com/yeti47/cryospy/server/core/videos"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -72,7 +73,46 @@ func main() {
 		log.Fatalf("Failed to create clip repository: %v", err)
 	}
 
-	storageManager := videos.NewStorageManager(logger, clipRepo, clientRepo, nil)
+	// Initialize notifiers based on configuration
+	var storageNotifier notifications.StorageNotifier
+	var motionNotifier notifications.MotionNotifier
+
+	// Initialize email sender if SMTP is configured
+	var emailSender notifications.EmailSender
+	if cfg.SMTPSettings != nil {
+		emailSender = notifications.NewSmtpSender(
+			cfg.SMTPSettings.Host,
+			cfg.SMTPSettings.Port,
+			cfg.SMTPSettings.Username,
+			cfg.SMTPSettings.Password,
+			cfg.SMTPSettings.FromAddr,
+		)
+	} else {
+		emailSender = notifications.NopSender
+	}
+
+	// Initialize storage notifier if configured
+	if cfg.StorageNotificationSettings != nil && emailSender != notifications.NopSender {
+		storageNotifierSettings := notifications.StorageNotificationSettings{
+			Recipient:        cfg.StorageNotificationSettings.Recipient,
+			MinInterval:      time.Duration(cfg.StorageNotificationSettings.MinIntervalMinutes) * time.Minute,
+			WarningThreshold: cfg.StorageNotificationSettings.WarningThreshold,
+		}
+		storageNotifier = notifications.NewEmailStorageNotifier(storageNotifierSettings, emailSender, logger)
+		logger.Info("Storage notifications enabled", "recipient", cfg.StorageNotificationSettings.Recipient)
+	}
+
+	// Initialize motion notifier if configured
+	if cfg.MotionNotificationSettings != nil && emailSender != notifications.NopSender {
+		motionNotifierSettings := notifications.MotionNotificationSettings{
+			Recipient:   cfg.MotionNotificationSettings.Recipient,
+			MinInterval: time.Duration(cfg.MotionNotificationSettings.MinIntervalMinutes) * time.Minute,
+		}
+		motionNotifier = notifications.NewEmailMotionNotifier(motionNotifierSettings, emailSender, logger)
+		logger.Info("Motion notifications enabled", "recipient", cfg.MotionNotificationSettings.Recipient)
+	}
+
+	storageManager := videos.NewStorageManager(logger, clipRepo, clientRepo, storageNotifier, motionNotifier)
 	clipCreator := videos.NewClipCreator(
 		logger,
 		storageManager,
