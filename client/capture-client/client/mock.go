@@ -71,11 +71,11 @@ func (m *MockCaptureServerClient) GetClientSettings(ctx context.Context) (*model
 }
 
 // UploadClip simulates uploading a video clip
-func (m *MockCaptureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool) error {
-	log.Printf("[MOCK] Uploading clip: %d bytes, type: %s, duration: %v, motion: %v", len(videoData), mimeType, duration, hasMotion)
+func (m *MockCaptureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool, recordingTimestamp time.Time) error {
+	log.Printf("[MOCK] Uploading clip: %d bytes, type: %s, duration: %v, motion: %v, recorded: %v", len(videoData), mimeType, duration, hasMotion, recordingTimestamp)
 
-	// Generate filename using server's clip title logic
-	timestamp := time.Now().UTC().Format("2006-01-02T15-04-05")
+	// Generate filename using server's clip title logic - use the actual recording timestamp
+	timestamp := recordingTimestamp.UTC().Format("2006-01-02T15-04-05")
 
 	// Use the actual duration passed in
 	durationStr := fmt.Sprintf("%.0f", duration.Seconds())
@@ -108,7 +108,7 @@ func (m *MockCaptureServerClient) UploadClip(ctx context.Context, videoData []by
 
 	// Record the upload
 	upload := UploadRecord{
-		Timestamp: time.Now(),
+		Timestamp: recordingTimestamp, // Use recording timestamp instead of upload time
 		Size:      len(videoData),
 		MimeType:  mimeType,
 		FilePath:  filePath,

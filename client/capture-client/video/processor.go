@@ -2,6 +2,7 @@ package video
 
 import (
 	"fmt"
+	"image"
 	"os"
 	"strconv"
 	"strings"
@@ -18,7 +19,7 @@ type Processor interface {
 	RecordClip(device string, duration time.Duration, outputPath string) error
 	ProcessClip(inputPath, outputPath string, settings *models.ClientSettings) error
 	DetectMotion(videoPath string) (bool, error)
-	StartContinuousCapture(device string, chunkDuration time.Duration, onChunkReady func(string)) error
+	StartContinuousCapture(device string, chunkDuration time.Duration, onChunkReady func(*models.VideoClip)) error
 	StopContinuousCapture()
 	CleanupTempFiles(maxAge time.Duration) error
 	GetOutputMimeType() string
@@ -245,7 +246,8 @@ func (p *VideoProcessor) GetVideoDuration(videoPath string) (time.Duration, erro
 	return duration, nil
 }
 
-// DetectMotion analyzes a video file for motion using gocv
+// DetectMotion analyzes a video file for motion using gocv. This implementation is more robust
+// against noise and lighting changes by using blurring, thresholding, and contour analysis.
 func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
 	// Open video file
 	video, err := gocv.OpenVideoCapture(videoPath)
@@ -261,12 +263,31 @@ func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
 	img := gocv.NewMat()
 	defer img.Close()
 
+	gray := gocv.NewMat()
+	defer gray.Close()
+
+	blurred := gocv.NewMat()
+	defer blurred.Close()
+
 	fgMask := gocv.NewMat()
 	defer fgMask.Close()
 
+	thresh := gocv.NewMat()
+	defer thresh.Close()
+
+	kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Pt(3, 3))
+	defer kernel.Close()
+
 	motionDetected := false
 	frameCount := 0
-	maxFramesToCheck := 100 // Limit frames to check for performance
+	maxFramesToCheck := 150 // Check more frames for better background establishment
+
+	// Minimum contour area to be considered motion. This can be tuned.
+	// It replaces the less reliable percentage-based sensitivity.
+	minArea := p.config.MotionMinArea
+	if minArea <= 0 {
+		minArea = 500 // Default value if not configured
+	}
 
 	for frameCount < maxFramesToCheck {
 		if ok := video.Read(&img); !ok {
@@ -277,17 +298,35 @@ func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
 			continue
 		}
 
-		// Apply background subtraction
-		detector.Apply(img, &fgMask)
+		// 1. Convert to grayscale
+		gocv.CvtColor(img, &gray, gocv.ColorBGRToGray)
 
-		// Count non-zero pixels (motion pixels)
-		nonZeroPixels := gocv.CountNonZero(fgMask)
+		// 2. Apply Gaussian blur to smooth the image and reduce noise
+		gocv.GaussianBlur(gray, &blurred, image.Pt(21, 21), 0, 0, gocv.BorderDefault)
 
-		// Calculate motion threshold based on configured sensitivity
-		// MotionSensitivity is a percentage (e.g., 1.0 = 1% of pixels)
-		motionThreshold := int(float64(img.Rows()*img.Cols()) * p.config.MotionSensitivity / 100.0)
-		if nonZeroPixels > motionThreshold {
-			motionDetected = true
+		// 3. Apply background subtraction
+		detector.Apply(blurred, &fgMask)
+
+		// 4. Threshold the foreground mask to get a binary image
+		gocv.Threshold(fgMask, &thresh, 25, 255, gocv.ThresholdBinary)
+
+		// 5. Dilate the thresholded image to fill in holes
+		gocv.Dilate(thresh, &thresh, kernel)
+
+		// 6. Find contours of the moving objects
+		contours := gocv.FindContours(thresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
+
+		// 7. Check if any contour is large enough
+		for i := range contours.Size() {
+			area := gocv.ContourArea(contours.At(i))
+			if area > float64(minArea) {
+				motionDetected = true
+				break
+			}
+		}
+		contours.Close()
+
+		if motionDetected {
 			break
 		}
 
@@ -298,7 +337,7 @@ func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
 }
 
 // StartContinuousCapture starts continuous video capture with chunking
-func (p *VideoProcessor) StartContinuousCapture(device string, chunkDuration time.Duration, onChunkReady func(string)) error {
+func (p *VideoProcessor) StartContinuousCapture(device string, chunkDuration time.Duration, onChunkReady func(*models.VideoClip)) error {
 	if p.capturing {
 		return fmt.Errorf("capture already in progress")
 	}
@@ -353,7 +392,7 @@ func (p *VideoProcessor) StopContinuousCapture() {
 }
 
 // captureLoop handles the continuous capture process
-func (p *VideoProcessor) captureLoop(chunkDuration time.Duration, onChunkReady func(string)) {
+func (p *VideoProcessor) captureLoop(chunkDuration time.Duration, onChunkReady func(*models.VideoClip)) {
 	defer func() {
 		fmt.Println("Capture loop ending, cleaning up...")
 		p.capturing = false
@@ -373,14 +412,21 @@ func (p *VideoProcessor) captureLoop(chunkDuration time.Duration, onChunkReady f
 		chunkFile := fmt.Sprintf("%s/chunk_%d_%d%s", p.tempDir, time.Now().Unix(), chunkCount, captureExtension)
 
 		// Record chunk
-		err := p.recordChunk(chunkFile, chunkDuration)
+		recordingStartTime, err := p.recordChunk(chunkFile, chunkDuration)
 		if err != nil {
 			fmt.Printf("Error recording chunk: %v\n", err)
 			// Don't continue immediately, check for stop signal first
 		} else {
 			// Notify that chunk is ready only if recording was successful
 			if onChunkReady != nil {
-				onChunkReady(chunkFile)
+				videoClip := &models.VideoClip{
+					Filename:  chunkFile,
+					Timestamp: recordingStartTime,
+					Duration:  chunkDuration,
+					HasMotion: false, // Will be determined later during processing
+					FilePath:  chunkFile,
+				}
+				onChunkReady(videoClip)
 			}
 		}
 
@@ -395,9 +441,9 @@ func (p *VideoProcessor) captureLoop(chunkDuration time.Duration, onChunkReady f
 }
 
 // recordChunk records a single chunk using the opened webcam
-func (p *VideoProcessor) recordChunk(outputPath string, duration time.Duration) error {
+func (p *VideoProcessor) recordChunk(outputPath string, duration time.Duration) (time.Time, error) {
 	if p.webcam == nil {
-		return fmt.Errorf("webcam not initialized")
+		return time.Time{}, fmt.Errorf("webcam not initialized")
 	}
 
 	// Get frame properties from webcam
@@ -415,7 +461,7 @@ func (p *VideoProcessor) recordChunk(outputPath string, duration time.Duration) 
 	// Create video writer - use configured codec
 	writer, err := gocv.VideoWriterFile(outputPath, p.config.CaptureCodec, p.config.CaptureFrameRate, width, height, true)
 	if err != nil {
-		return fmt.Errorf("failed to create video writer: %w", err)
+		return time.Time{}, fmt.Errorf("failed to create video writer: %w", err)
 	}
 	defer func() {
 		fmt.Printf("Closing video writer for %s\n", outputPath)
@@ -462,10 +508,10 @@ recordLoop:
 
 	// Check if we recorded any frames
 	if frameCount == 0 {
-		return fmt.Errorf("no frames were recorded from webcam")
+		return time.Time{}, fmt.Errorf("no frames were recorded from webcam")
 	}
 
-	return nil
+	return startTime, nil
 }
 
 // parseResolution converts resolution strings like "720p" to ffmpeg scale format

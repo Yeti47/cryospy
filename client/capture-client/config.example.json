@@ -10,5 +10,5 @@
   "video_bitrate": "500k",
   "capture_codec": "MJPG",
   "capture_framerate": 15.0,
-  "motion_sensitivity": 10.0
+  "motion_min_area": 500
 }

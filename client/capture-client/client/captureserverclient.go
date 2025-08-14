@@ -17,7 +17,7 @@ import (
 // CaptureServerClient handles communication with the capture server
 type CaptureServerClient interface {
 	GetClientSettings(ctx context.Context) (*models.ClientSettings, error)
-	UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool) error
+	UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool, recordingTimestamp time.Time) error
 }
 
 // captureServerClient implements ClientService using HTTP
@@ -72,15 +72,15 @@ func (s *captureServerClient) GetClientSettings(ctx context.Context) (*models.Cl
 }
 
 // UploadClip uploads a video clip to the server
-func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool) error {
+func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool, recordingTimestamp time.Time) error {
 	url := fmt.Sprintf("%s/api/clips", s.serverURL)
 
 	// Create multipart form
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	// Add timestamp field
-	if err := writer.WriteField("timestamp", time.Now().UTC().Format(time.RFC3339)); err != nil {
+	// Add timestamp field - use the actual recording timestamp instead of upload time
+	if err := writer.WriteField("timestamp", recordingTimestamp.UTC().Format(time.RFC3339)); err != nil {
 		return fmt.Errorf("failed to write timestamp field: %w", err)
 	}
 

@@ -22,6 +22,7 @@ type Config struct {
 	CaptureCodec      string  `json:"capture_codec"`       // Codec for initial capture (e.g., "MJPG", "MP4V")
 	CaptureFrameRate  float64 `json:"capture_framerate"`   // Frame rate for video capture (e.g., 15.0, 30.0)
 	MotionSensitivity float64 `json:"motion_sensitivity"`  // Motion detection sensitivity as percentage (e.g., 1.0 = 1% of pixels)
+	MotionMinArea     int     `json:"motion_min_area"`     // Minimum contour area to be considered motion
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -39,19 +40,19 @@ func LoadConfig(filename string) (*Config, error) {
 				SettingsSyncSeconds: 300, // 5 minutes default
 
 				// Video processing defaults
-				VideoCodec:        "libopenh264", // Open-source H.264 codec that works on Fedora
-				VideoOutputFormat: "mp4",         // Standard MP4 container
-				VideoBitRate:      "500k",        // 500 Kbps for reasonable file sizes
-				CaptureCodec:      "MJPG",        // Motion JPEG for reliable capture
-				CaptureFrameRate:  15.0,          // 15 FPS for smaller files
-				MotionSensitivity: 10.0,          // 10% of pixels changing for motion detection
+				VideoCodec:        "libx264",
+				VideoOutputFormat: "mp4",
+				VideoBitRate:      "500k",
+				CaptureCodec:      "MJPG",
+				CaptureFrameRate:  15.0,
+				MotionSensitivity: 1.0,
+				MotionMinArea:     500, // Default minimum area for motion detection
 			}
-
 			if err := saveConfig(filename, defaultConfig); err != nil {
 				return nil, fmt.Errorf("failed to create default config file: %w", err)
 			}
-
-			return nil, fmt.Errorf("config file '%s' was created with default values. Please edit it with your settings and run the application again", filename)
+			fmt.Printf("Default config file created at %s\n", filename)
+			return defaultConfig, nil
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -91,6 +92,9 @@ func LoadConfig(filename string) (*Config, error) {
 	if config.MotionSensitivity == 0 {
 		config.MotionSensitivity = 10.0
 	}
+	if config.MotionMinArea == 0 {
+		config.MotionMinArea = 500
+	}
 
 	return &config, nil
 }
@@ -109,6 +113,7 @@ type ConfigOverrides struct {
 	CaptureCodec        *string
 	CaptureFrameRate    *float64
 	MotionSensitivity   *float64
+	MotionMinArea       *int
 }
 
 // Override allows overriding specific configuration values using ConfigOverrides struct
@@ -150,6 +155,9 @@ func (c *Config) Override(overrides ConfigOverrides) {
 	}
 	if overrides.MotionSensitivity != nil && *overrides.MotionSensitivity > 0 {
 		c.MotionSensitivity = *overrides.MotionSensitivity
+	}
+	if overrides.MotionMinArea != nil && *overrides.MotionMinArea > 0 {
+		c.MotionMinArea = *overrides.MotionMinArea
 	}
 }
 

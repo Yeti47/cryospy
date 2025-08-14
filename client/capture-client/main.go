@@ -20,10 +20,11 @@ import (
 
 // UploadInfo contains information needed for uploading a video clip
 type UploadInfo struct {
-	FilePath  string
-	HasMotion bool
-	MimeType  string
-	Duration  time.Duration
+	FilePath           string
+	HasMotion          bool
+	MimeType           string
+	Duration           time.Duration
+	RecordingTimestamp time.Time
 }
 
 func main() {
@@ -44,7 +45,7 @@ func main() {
 	videoBitRate := flag.String("video-bitrate", "", "Video bitrate (overrides config, e.g., '500k', '1M')")
 	captureCodec := flag.String("capture-codec", "", "Capture codec (overrides config, e.g., 'MJPG', 'MP4V')")
 	captureFrameRate := flag.Float64("capture-framerate", 0, "Capture frame rate (overrides config, e.g., 15.0, 30.0)")
-	motionSensitivity := flag.Float64("motion-sensitivity", 0, "Motion detection sensitivity as percentage (overrides config, e.g., 1.0, 0.5)")
+	motionMinArea := flag.Int("motion-min-area", 0, "Minimum contour area for motion detection (overrides config)")
 
 	flag.Parse()
 
@@ -67,14 +68,14 @@ func main() {
 		VideoBitRate:        videoBitRate,
 		CaptureCodec:        captureCodec,
 		CaptureFrameRate:    captureFrameRate,
-		MotionSensitivity:   motionSensitivity,
+		MotionMinArea:       motionMinArea,
 	})
 
 	// Log final configuration (without sensitive data)
 	log.Printf("Configuration: ServerURL=%s, CameraDevice=%s, BufferSize=%d, SettingsSyncSeconds=%d",
 		cfg.ServerURL, cfg.CameraDevice, cfg.BufferSize, cfg.SettingsSyncSeconds)
-	log.Printf("Video Processing: Codec=%s, Format=%s, BitRate=%s, CaptureCodec=%s, CaptureFrameRate=%.1f",
-		cfg.VideoCodec, cfg.VideoOutputFormat, cfg.VideoBitRate, cfg.CaptureCodec, cfg.CaptureFrameRate)
+	log.Printf("Video Processing: Codec=%s, Format=%s, BitRate=%s, CaptureCodec=%s, CaptureFrameRate=%.1f, MotionMinArea=%d",
+		cfg.VideoCodec, cfg.VideoOutputFormat, cfg.VideoBitRate, cfg.CaptureCodec, cfg.CaptureFrameRate, cfg.MotionMinArea)
 
 	// Create client service based on mode
 	var clientService client.CaptureServerClient
@@ -179,15 +180,18 @@ func (app *CaptureApp) startCapture() error {
 }
 
 // onChunkReady is called when a video chunk is ready for processing
-func (app *CaptureApp) onChunkReady(chunkPath string) {
-	log.Printf("Chunk ready: %s", chunkPath)
+func (app *CaptureApp) onChunkReady(videoClip *models.VideoClip) {
+	log.Printf("Chunk ready: %s (recorded at %v)", videoClip.FilePath, videoClip.Timestamp)
 
 	// Process the chunk in a separate goroutine to not block capture
-	go app.processChunk(chunkPath)
+	go app.processChunk(videoClip)
 }
 
 // processChunk handles the processing and upload of a video chunk
-func (app *CaptureApp) processChunk(rawChunkPath string) {
+func (app *CaptureApp) processChunk(videoClip *models.VideoClip) {
+	rawChunkPath := videoClip.FilePath
+	recordingTimestamp := videoClip.Timestamp
+	
 	app.mu.Lock()
 	app.processingClip = true
 	app.mu.Unlock()
@@ -254,10 +258,11 @@ func (app *CaptureApp) processChunk(rawChunkPath string) {
 
 	// Queue for upload
 	uploadInfo := UploadInfo{
-		FilePath:  processedPath,
-		HasMotion: hasMotion,
-		MimeType:  app.processor.GetOutputMimeType(),
-		Duration:  actualDuration,
+		FilePath:           processedPath,
+		HasMotion:          hasMotion,
+		MimeType:           app.processor.GetOutputMimeType(),
+		Duration:           actualDuration,
+		RecordingTimestamp: recordingTimestamp,
 	}
 	select {
 	case app.uploadQueue <- uploadInfo:
@@ -273,7 +278,7 @@ func (app *CaptureApp) uploadWorker() {
 	for {
 		select {
 		case uploadInfo := <-app.uploadQueue:
-			app.uploadChunk(uploadInfo.FilePath, uploadInfo.HasMotion, uploadInfo.MimeType, uploadInfo.Duration)
+			app.uploadChunk(uploadInfo.FilePath, uploadInfo.HasMotion, uploadInfo.MimeType, uploadInfo.Duration, uploadInfo.RecordingTimestamp)
 		case <-app.shutdown:
 			return
 		}
@@ -356,10 +361,10 @@ func (app *CaptureApp) getSettings() *models.ClientSettings {
 }
 
 // uploadChunk uploads a processed video chunk to the server
-func (app *CaptureApp) uploadChunk(processedPath string, hasMotion bool, mimeType string, duration time.Duration) {
+func (app *CaptureApp) uploadChunk(processedPath string, hasMotion bool, mimeType string, duration time.Duration, recordingTimestamp time.Time) {
 	defer os.Remove(processedPath) // Clean up after upload
 
-	log.Printf("Uploading %s (motion: %v, duration: %v, type: %s)...", processedPath, hasMotion, duration, mimeType)
+	log.Printf("Uploading %s (motion: %v, duration: %v, type: %s, recorded: %v)...", processedPath, hasMotion, duration, mimeType, recordingTimestamp)
 
 	// Read the video file
 	videoData, err := os.ReadFile(processedPath)
@@ -372,8 +377,8 @@ func (app *CaptureApp) uploadChunk(processedPath string, hasMotion bool, mimeTyp
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Use the pre-determined values from the upload queue
-	err = app.clientService.UploadClip(ctx, videoData, mimeType, duration, hasMotion)
+	// Use the actual recording timestamp instead of upload time
+	err = app.clientService.UploadClip(ctx, videoData, mimeType, duration, hasMotion, recordingTimestamp)
 	if err != nil {
 		log.Printf("Failed to upload %s: %v", processedPath, err)
 		// TODO: Implement retry logic or save to disk for later retry

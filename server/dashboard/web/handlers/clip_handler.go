@@ -45,17 +45,17 @@ func (h *ClipHandler) ListClips(c *gin.Context) {
 		query.ClientID = clientID
 	}
 
-	// Start time filter
-	if startTimeStr := c.Query("startTime"); startTimeStr != "" {
-		if startTime, err := time.Parse("2006-01-02T15:04", startTimeStr); err == nil {
-			query.StartTime = &startTime
+	// Start datetime filter
+	if startDateTimeStr := c.Query("startDateTime"); startDateTimeStr != "" {
+		if startDateTime, err := time.Parse("2006-01-02T15:04", startDateTimeStr); err == nil {
+			query.StartTime = &startDateTime
 		}
 	}
 
-	// End time filter
-	if endTimeStr := c.Query("endTime"); endTimeStr != "" {
-		if endTime, err := time.Parse("2006-01-02T15:04", endTimeStr); err == nil {
-			query.EndTime = &endTime
+	// End datetime filter
+	if endDateTimeStr := c.Query("endDateTime"); endDateTimeStr != "" {
+		if endDateTime, err := time.Parse("2006-01-02T15:04", endDateTimeStr); err == nil {
+			query.EndTime = &endDateTime
 		}
 	}
 
@@ -87,10 +87,10 @@ func (h *ClipHandler) ListClips(c *gin.Context) {
 
 	// Prepare current filter values for the template
 	filterValues := gin.H{
-		"ClientID":  c.Query("clientId"),
-		"StartTime": c.Query("startTime"),
-		"EndTime":   c.Query("endTime"),
-		"HasMotion": c.Query("hasMotion"),
+		"ClientID":      c.Query("clientId"),
+		"StartDateTime": c.Query("startDateTime"),
+		"EndDateTime":   c.Query("endDateTime"),
+		"HasMotion":     c.Query("hasMotion"),
 	}
 
 	c.HTML(http.StatusOK, "clips", gin.H{
