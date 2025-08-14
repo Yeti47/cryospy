@@ -2,6 +2,9 @@ package videos
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -9,6 +12,8 @@ import (
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/clients"
 	"github.com/yeti47/cryospy/server/core/notifications"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // mockStorageNotifier is a test implementation of StorageNotifier
@@ -93,14 +98,61 @@ func setupStorageManagerTest(t *testing.T) (*storageManager, *SQLiteClipReposito
 
 	// Create storage manager
 	sm := &storageManager{
-		logger:     logging.NopLogger,
-		clipRepo:   clipRepo,
-		clientRepo: clientRepo,
-		notifier:   notifier,
+		logger:               logging.NopLogger,
+		clipRepo:             clipRepo,
+		clientRepo:           clientRepo,
+		notifier:             notifier,
+		clientStorageMutexes: sync.Map{},
 	}
 
 	cleanup := func() {
 		testDB.Close()
+	}
+
+	return sm, clipRepo, clientRepo, notifier, cleanup
+}
+
+// setupConcurrencyTest creates a test environment with SQLite optimizations for concurrency testing
+func setupConcurrencyTest(t *testing.T) (*storageManager, *SQLiteClipRepository, *clients.SQLiteClientRepository, *mockStorageNotifier, func()) {
+	// Create in-memory database with SQLite optimizations for concurrency
+	// Use shared cache to allow multiple connections to the same in-memory database
+	dbConn, err := sql.Open("sqlite3", "file::memory:?cache=shared&_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache_size=10000")
+	if err != nil {
+		t.Fatalf("Failed to create optimized in-memory database: %v", err)
+	}
+
+	// Configure connection pool for better concurrency (same as production)
+	dbConn.SetMaxOpenConns(10)                  // Allow up to 10 concurrent connections
+	dbConn.SetMaxIdleConns(5)                   // Keep 5 idle connections
+	dbConn.SetConnMaxLifetime(30 * time.Minute) // Rotate connections every 30 minutes
+
+	// Create repositories
+	clipRepo, err := NewSQLiteClipRepository(dbConn)
+	if err != nil {
+		dbConn.Close()
+		t.Fatalf("Failed to create clip repository: %v", err)
+	}
+
+	clientRepo, err := clients.NewSQLiteClientRepository(dbConn)
+	if err != nil {
+		dbConn.Close()
+		t.Fatalf("Failed to create client repository: %v", err)
+	}
+
+	// Create mock notifier (80% threshold)
+	notifier := newMockStorageNotifier(0.8)
+
+	// Create storage manager
+	sm := &storageManager{
+		logger:               logging.NopLogger,
+		clipRepo:             clipRepo,
+		clientRepo:           clientRepo,
+		notifier:             notifier,
+		clientStorageMutexes: sync.Map{},
+	}
+
+	cleanup := func() {
+		dbConn.Close()
 	}
 
 	return sm, clipRepo, clientRepo, notifier, cleanup
@@ -561,4 +613,325 @@ func TestStorageManager_StoreClip_ExactCapacityLimit(t *testing.T) {
 	if retrievedClip == nil {
 		t.Error("Expected clip to be added at exact capacity limit")
 	}
+}
+
+func TestStorageManager_ConcurrentUploads(t *testing.T) {
+	sm, clipRepo, clientRepo, notifier, cleanup := setupConcurrencyTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create a client with limited storage (10MB)
+	client := createTestClientForStorage("concurrent-client", 10)
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create test client: %v", err)
+	}
+
+	// Add some existing clips to use up most of the space (8MB)
+	existingClip := createTestClipForStorage("existing-clip", "concurrent-client", 8*1024*1024) // 8MB
+	err = sm.StoreClip(ctx, existingClip)
+	if err != nil {
+		t.Fatalf("Failed to store existing clip: %v", err)
+	}
+
+	// Now we have 2MB left. Let's try to upload 5 clips of 1MB each concurrently
+	// Only 2 should succeed, the rest should trigger cleanup
+	numGoroutines := 5
+	clipSize := 1 * 1024 * 1024 // 1MB each
+
+	// Channels to collect results
+	results := make(chan error, numGoroutines)
+	clipIDs := make(chan string, numGoroutines)
+
+	// Launch concurrent uploads
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			clipID := fmt.Sprintf("concurrent-clip-%d", index)
+			clip := createTestClipForStorage(clipID, "concurrent-client", clipSize)
+
+			err := sm.StoreClip(ctx, clip)
+			results <- err
+			if err == nil {
+				clipIDs <- clipID
+			}
+		}(i)
+	}
+
+	// Collect results
+	var successCount int
+	var errorCount int
+	var successfulClipIDs []string
+
+	for i := 0; i < numGoroutines; i++ {
+		err := <-results
+		if err != nil {
+			errorCount++
+			t.Logf("Upload %d failed: %v", i, err)
+		} else {
+			successCount++
+		}
+	}
+
+	// Collect successful clip IDs
+	close(clipIDs)
+	for clipID := range clipIDs {
+		successfulClipIDs = append(successfulClipIDs, clipID)
+	}
+
+	t.Logf("Concurrent upload results: %d successes, %d errors", successCount, errorCount)
+
+	// Verify that we didn't exceed storage limits
+	totalUsage, err := clipRepo.GetTotalStorageUsage(ctx, "concurrent-client")
+	if err != nil {
+		t.Fatalf("Failed to get total storage usage: %v", err)
+	}
+
+	totalUsageMB := totalUsage / (1024 * 1024)
+	t.Logf("Total storage usage after concurrent uploads: %d MB", totalUsageMB)
+
+	// Should not exceed the 10MB limit
+	if totalUsageMB > 10 {
+		t.Errorf("Storage limit exceeded: %d MB > 10 MB", totalUsageMB)
+	}
+
+	// At least some uploads should have succeeded
+	if successCount == 0 {
+		t.Error("No uploads succeeded - this suggests a serious concurrency issue")
+	}
+
+	// Verify that capacity reached notifications were sent
+	if len(notifier.capacityReached) == 0 {
+		t.Error("Expected capacity reached notifications to be sent")
+	}
+
+	// Verify all successful clips are actually stored and can be retrieved
+	for _, clipID := range successfulClipIDs {
+		retrievedClip, err := clipRepo.GetByID(ctx, clipID)
+		if err != nil {
+			t.Errorf("Failed to retrieve successfully stored clip %s: %v", clipID, err)
+		}
+		if retrievedClip == nil {
+			t.Errorf("Successfully stored clip %s not found in database", clipID)
+		}
+	}
+}
+
+func TestStorageManager_ConcurrentUploadsStressTest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping stress test in short mode")
+	}
+
+	sm, clipRepo, clientRepo, _, cleanup := setupConcurrencyTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create a client with unlimited storage for stress testing
+	client := createTestClientForStorage("stress-client", 0) // 0 = unlimited
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create test client: %v", err)
+	}
+
+	// Perform many concurrent uploads to test for database lock issues
+	numGoroutines := 20
+	uploadsPerGoroutine := 5
+	clipSize := 1024 // 1KB clips
+
+	results := make(chan error, numGoroutines*uploadsPerGoroutine)
+
+	// Launch many concurrent uploads
+	for g := 0; g < numGoroutines; g++ {
+		go func(goroutineID int) {
+			for u := 0; u < uploadsPerGoroutine; u++ {
+				clipID := fmt.Sprintf("stress-clip-%d-%d", goroutineID, u)
+				clip := createTestClipForStorage(clipID, "stress-client", clipSize)
+
+				err := sm.StoreClip(ctx, clip)
+				results <- err
+			}
+		}(g)
+	}
+
+	// Collect results
+	var successCount int
+	var errorCount int
+	totalOperations := numGoroutines * uploadsPerGoroutine
+
+	for i := 0; i < totalOperations; i++ {
+		err := <-results
+		if err != nil {
+			errorCount++
+			t.Logf("Stress test upload failed: %v", err)
+		} else {
+			successCount++
+		}
+	}
+
+	t.Logf("Stress test results: %d successes, %d errors out of %d total operations",
+		successCount, errorCount, totalOperations)
+
+	// In a stress test with unlimited storage, most operations should succeed
+	successRate := float64(successCount) / float64(totalOperations)
+	if successRate < 0.95 { // Allow for some failures, but expect 95%+ success
+		t.Errorf("Success rate too low: %.2f%% (expected >= 95%%)", successRate*100)
+	}
+
+	// Verify the expected number of clips were stored
+	// Note: some clips might have been overwritten if they had the same timestamp
+	// so we just verify we have a reasonable number stored
+	clips, totalCount, err := clipRepo.Query(ctx, ClipQuery{ClientID: "stress-client"})
+	if err != nil {
+		t.Fatalf("Failed to query clips: %v", err)
+	}
+
+	t.Logf("Total clips stored after stress test: %d", totalCount)
+	if totalCount == 0 {
+		t.Error("No clips were stored during stress test")
+	}
+
+	// Verify we can retrieve all stored clips without errors
+	for _, clip := range clips {
+		retrievedClip, err := clipRepo.GetByID(ctx, clip.ID)
+		if err != nil {
+			t.Errorf("Failed to retrieve clip %s: %v", clip.ID, err)
+		}
+		if retrievedClip == nil {
+			t.Errorf("Clip %s not found", clip.ID)
+		}
+	}
+}
+
+func TestStorageManager_ConcurrentStorageLimitRaceCondition(t *testing.T) {
+	sm, clipRepo, clientRepo, _, cleanup := setupConcurrencyTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create a client with exactly 5MB storage limit
+	client := createTestClientForStorage("race-client", 5)
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create test client: %v", err)
+	}
+
+	// Add existing clips to use up 3MB (leaving 2MB free)
+	existingClip := createTestClipForStorage("existing-clip", "race-client", 3*1024*1024) // 3MB
+	err = sm.StoreClip(ctx, existingClip)
+	if err != nil {
+		t.Fatalf("Failed to store existing clip: %v", err)
+	}
+
+	// Now try to upload 10 clips of 1MB each concurrently
+	// In the race condition scenario, multiple might read "3MB used" and think they can add 1MB
+	// But only 2 should actually succeed without causing storage limit violations
+	numGoroutines := 10
+	clipSize := 1 * 1024 * 1024 // 1MB each
+
+	results := make(chan error, numGoroutines)
+	successfulClips := make(chan string, numGoroutines)
+
+	// Launch concurrent uploads
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			clipID := fmt.Sprintf("race-clip-%d", index)
+			clip := createTestClipForStorage(clipID, "race-client", clipSize)
+			// Add slight time variation to make clips more distinct
+			clip.TimeStamp = time.Now().UTC().Add(time.Duration(index) * time.Millisecond)
+
+			err := sm.StoreClip(ctx, clip)
+			results <- err
+			if err == nil {
+				successfulClips <- clipID
+			}
+		}(i)
+	}
+
+	// Collect results
+	var successCount int
+	var errorCount int
+	var storedClipIDs []string
+
+	for i := 0; i < numGoroutines; i++ {
+		err := <-results
+		if err != nil {
+			errorCount++
+		} else {
+			successCount++
+		}
+	}
+
+	// Collect successful clip IDs
+	close(successfulClips)
+	for clipID := range successfulClips {
+		storedClipIDs = append(storedClipIDs, clipID)
+	}
+
+	t.Logf("Race condition test results: %d successes, %d errors", successCount, errorCount)
+
+	// Check final storage usage - this is the critical test
+	totalUsage, err := clipRepo.GetTotalStorageUsage(ctx, "race-client")
+	if err != nil {
+		t.Fatalf("Failed to get total storage usage: %v", err)
+	}
+
+	totalUsageMB := totalUsage / (1024 * 1024)
+	t.Logf("Final storage usage: %d MB (limit: 5 MB)", totalUsageMB)
+
+	// This is the key assertion - we should never exceed the storage limit
+	// Even if there are race conditions in our logic, the storage should not exceed 5MB
+	if totalUsageMB > 5 {
+		t.Errorf("CRITICAL: Storage limit exceeded due to race condition: %d MB > 5 MB", totalUsageMB)
+
+		// Additional debugging information
+		t.Logf("Stored clip IDs: %v", storedClipIDs)
+
+		// Check what clips are actually stored
+		allClips, _, err := clipRepo.Query(ctx, ClipQuery{ClientID: "race-client"})
+		if err != nil {
+			t.Logf("Failed to query all clips for debugging: %v", err)
+		} else {
+			t.Logf("All clips in database:")
+			for _, clip := range allClips {
+				clipSizeMB := int64(len(clip.EncryptedVideo)) / (1024 * 1024)
+				t.Logf("  - %s: %d MB at %v", clip.ID, clipSizeMB, clip.TimeStamp)
+			}
+		}
+	}
+
+	// At least some uploads should succeed (we had 2MB free space)
+	if successCount == 0 {
+		t.Error("No uploads succeeded - this suggests all operations are failing")
+	}
+
+	// Verify that clips currently in database are retrievable
+	// Note: Some successfully stored clips might have been deleted by cleanup from other concurrent operations
+	currentClips, _, err := clipRepo.Query(ctx, ClipQuery{ClientID: "race-client"})
+	if err != nil {
+		t.Fatalf("Failed to query current clips: %v", err)
+	}
+
+	t.Logf("Current clips remaining in database: %d", len(currentClips))
+	for _, clip := range currentClips {
+		retrievedClip, err := clipRepo.GetByID(ctx, clip.ID)
+		if err != nil {
+			t.Errorf("Failed to retrieve current clip %s: %v", clip.ID, err)
+		}
+		if retrievedClip == nil {
+			t.Errorf("Current clip %s not found in database", clip.ID)
+		}
+	}
+
+	// The key test: verify that concurrent operations didn't cause storage limit violations
+	// This is the critical assertion that proves the race condition is fixed
+	if totalUsageMB > 5 {
+		t.Errorf("CRITICAL: Storage limit exceeded due to race condition: %d MB > 5 MB", totalUsageMB)
+	} else {
+		t.Logf("SUCCESS: Storage limit respected despite %d concurrent operations", numGoroutines)
+	}
+
+	// Note: It's normal for some "successful" clips to be missing from the database
+	// because cleanup operations from other concurrent uploads may have deleted them.
+	// This is correct behavior - the clip was successfully stored, but later cleaned up.
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"text/template"
+	"time"
 
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
@@ -40,13 +41,18 @@ func main() {
 	// Set up logger
 	logger := logging.CreateLogger(logging.LogLevel(cfg.LogLevel), cfg.LogPath, "dashboard")
 
-	// Set up database connection
-	dbConn, err := sql.Open("sqlite3", cfg.DatabasePath)
+	// Set up database connection with SQLite optimizations for concurrency
+	dbConn, err := sql.Open("sqlite3", cfg.DatabasePath+"?_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache_size=10000")
 	if err != nil {
 		logger.Error("Failed to open database", err)
 		os.Exit(1)
 	}
 	defer dbConn.Close()
+
+	// Configure connection pool for better concurrency
+	dbConn.SetMaxOpenConns(10)                  // Allow up to 10 concurrent connections
+	dbConn.SetMaxIdleConns(5)                   // Keep 5 idle connections
+	dbConn.SetConnMaxLifetime(30 * time.Minute) // Rotate connections every 30 minutes
 
 	// Set up repositories
 	mekRepo, err := encryption.NewSQLiteMekRepository(dbConn)

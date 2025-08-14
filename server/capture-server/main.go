@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yeti47/cryospy/server/capture-server/handlers"
@@ -38,12 +39,17 @@ func main() {
 	logger := logging.CreateLogger(logging.LogLevel(cfg.LogLevel), cfg.LogPath, "capture-server")
 	logger.Info("Starting capture server", "port", cfg.CapturePort)
 
-	// Initialize database
-	database, err := sql.Open("sqlite3", cfg.DatabasePath)
+	// Initialize database with SQLite optimizations for concurrency
+	database, err := sql.Open("sqlite3", cfg.DatabasePath+"?_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache_size=10000")
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
 	defer database.Close()
+
+	// Configure connection pool for better concurrency
+	database.SetMaxOpenConns(10)                  // Allow up to 10 concurrent connections
+	database.SetMaxIdleConns(5)                   // Keep 5 idle connections
+	database.SetConnMaxLifetime(30 * time.Minute) // Rotate connections every 30 minutes
 
 	// Initialize encryption
 	encryptor := encryption.NewAESEncryptor()
