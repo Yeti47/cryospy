@@ -20,6 +20,7 @@ type Processor interface {
 	DetectMotion(videoPath string) (bool, error)
 	StartContinuousCapture(device string, chunkDuration time.Duration, onChunkReady func(string)) error
 	StopContinuousCapture()
+	CleanupTempFiles(maxAge time.Duration) error
 }
 
 // VideoProcessor implements Processor using gocv for capture/motion detection and goffmpeg for processing
@@ -397,4 +398,43 @@ func parseResolution(resolution string) string {
 		}
 		return ""
 	}
+}
+
+// CleanupTempFiles removes temporary files older than maxAge
+func (p *VideoProcessor) CleanupTempFiles(maxAge time.Duration) error {
+	entries, err := os.ReadDir(p.tempDir)
+	if err != nil {
+		return fmt.Errorf("failed to read temp directory: %w", err)
+	}
+
+	cutoffTime := time.Now().Add(-maxAge)
+	var cleanedCount int
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			fmt.Printf("Warning: failed to get file info for %s: %v\n", entry.Name(), err)
+			continue
+		}
+
+		if info.ModTime().Before(cutoffTime) {
+			filePath := fmt.Sprintf("%s/%s", p.tempDir, entry.Name())
+			if err := os.Remove(filePath); err != nil {
+				fmt.Printf("Warning: failed to remove temp file %s: %v\n", filePath, err)
+			} else {
+				fmt.Printf("Cleaned up temp file: %s\n", filePath)
+				cleanedCount++
+			}
+		}
+	}
+
+	if cleanedCount > 0 {
+		fmt.Printf("Cleaned up %d temporary files\n", cleanedCount)
+	}
+
+	return nil
 }

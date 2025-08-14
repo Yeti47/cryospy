@@ -99,6 +99,12 @@ func main() {
 		log.Fatalf("Failed to create video processor: %v", err)
 	}
 
+	// Clean up old temporary files on startup (older than 1 hour)
+	log.Println("Cleaning up old temporary files...")
+	if err := processor.CleanupTempFiles(1 * time.Hour); err != nil {
+		log.Printf("Warning: Failed to cleanup temp files: %v", err)
+	}
+
 	// Create capture application
 	app := &CaptureApp{
 		config:         cfg,
