@@ -8,6 +8,11 @@ import (
 	"github.com/yeti47/cryospy/server/core/encryption"
 )
 
+const (
+	maxPageSize     = 100 // Maximum allowed page size for queries
+	defaultPageSize = 20  // Default page size if not specified
+)
+
 // ClipReader handles reading and decrypting video clips for admin access
 type ClipReader interface {
 	// QueryClips retrieves clips with decrypted video and thumbnail data
@@ -51,6 +56,11 @@ func (r *clipReader) QueryClips(query ClipQuery, mekStore encryption.MekStore) (
 		return nil, 0, err
 	}
 
+	// make sure page size is within limits
+	if query.PageSize < 1 || query.PageSize > maxPageSize {
+		query.PageSize = defaultPageSize // default page size
+	}
+
 	// Query encrypted clips from repository
 	clips, totalCount, err := r.clipRepo.Query(context.Background(), query)
 	if err != nil {
@@ -75,6 +85,12 @@ func (r *clipReader) QueryClips(query ClipQuery, mekStore encryption.MekStore) (
 }
 
 func (r *clipReader) QueryClipInfos(query ClipQuery) ([]*ClipInfo, int, error) {
+
+	// make sure page size is within limits
+	if query.PageSize < 1 || query.PageSize > maxPageSize {
+		query.PageSize = defaultPageSize // default page size
+	}
+
 	// Query clip infos from repository (no decryption needed)
 	clipInfos, totalCount, err := r.clipRepo.QueryInfo(context.Background(), query)
 	if err != nil {
