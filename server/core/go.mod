@@ -8,4 +8,4 @@ require golang.org/x/crypto v0.41.0
 
 require github.com/google/uuid v1.6.0
 
-require github.com/xfrr/goffmpeg v1.0.0 // indirect
+require github.com/xfrr/goffmpeg v1.0.0 

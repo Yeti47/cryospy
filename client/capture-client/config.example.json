@@ -1,0 +1,14 @@
+{
+  "client_id": "your-client-id",
+  "client_secret": "your-client-secret",
+  "server_url": "http://localhost:8080",
+  "camera_device": "/dev/video0",
+  "buffer_size": 5,
+  "settings_sync_seconds": 300,
+  "video_codec": "mpeg4",
+  "video_output_format": "mp4",
+  "video_bitrate": "500k",
+  "capture_codec": "MJPG",
+  "capture_framerate": 15.0,
+  "motion_sensitivity": 10.0
+}

@@ -115,5 +115,9 @@ local.yml
 
 # binaries and executables
 __debug_bin*
-capture-server/capture-server
-dashboard/dashboard
+client/capture-client/capture-client
+server/capture-server/capture-server
+server/dashboard/dashboard
+
+# mock uploads
+mock-uploads/
