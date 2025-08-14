@@ -3,12 +3,14 @@ package clients
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 
 	"github.com/yeti47/cryospy/server/core/encryption"
 )
 
 type ClientVerifier interface {
 	// VerifyClient verifies the client using its ID and secret
+	// The clientSecret parameter should be hex-encoded
 	VerifyClient(clientID, clientSecret string) (bool, *Client, error)
 }
 
@@ -24,6 +26,8 @@ func NewClientVerifier(clientRepo ClientRepository, encryptor encryption.Encrypt
 	}
 }
 
+// VerifyClient verifies the client using its ID and secret
+// The clientSecret parameter should be hex-encoded
 func (v *clientVerifier) VerifyClient(clientID, clientSecret string) (bool, *Client, error) {
 	// Retrieve the client by ID
 	client, err := v.clientRepo.GetByID(context.Background(), clientID)
@@ -35,7 +39,13 @@ func (v *clientVerifier) VerifyClient(clientID, clientSecret string) (bool, *Cli
 	}
 
 	// Verify the client secret
-	// First base64-decode the secret salt from the client
+	// First decode the client secret from hex (since it was sent as hex-encoded string)
+	decodedClientSecret, err := hex.DecodeString(clientSecret)
+	if err != nil {
+		return false, nil, NewClientVerificationError(clientID) // don't specify the reason to avoid leaking information
+	}
+
+	// Base64-decode the secret salt from the client
 	decodedSecretSalt, err := base64.StdEncoding.DecodeString(client.SecretSalt)
 	if err != nil {
 		return false, nil, err
@@ -48,7 +58,7 @@ func (v *clientVerifier) VerifyClient(clientID, clientSecret string) (bool, *Cli
 	}
 
 	// Compare hash
-	if !v.encryptor.CompareHash(decodedSecretHash, []byte(clientSecret), decodedSecretSalt) {
+	if !v.encryptor.CompareHash(decodedSecretHash, decodedClientSecret, decodedSecretSalt) {
 		return false, nil, NewClientVerificationError(clientID) // don't specify the reason to avoid leaking information
 	}
 

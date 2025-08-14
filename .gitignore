@@ -113,4 +113,7 @@ __pycache__/
 docker-compose.override.yml
 local.yml
 
+# binaries and executables
 __debug_bin*
+capture-server/capture-server
+dashboard/dashboard

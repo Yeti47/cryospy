@@ -50,6 +50,11 @@ func IsClientValidationError(err error) bool {
 	return ok
 }
 
+func IsClientVerificationError(err error) bool {
+	_, ok := err.(*ClientVerificationError)
+	return ok
+}
+
 // helper function to create a new ClientAlreadyExistsError
 func NewClientAlreadyExistsError(id string) error {
 	return &ClientAlreadyExistsError{ID: id}

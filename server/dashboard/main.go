@@ -24,7 +24,7 @@ import (
 
 func main() {
 	// Load configuration
-	cfg, err := config.LoadConfig("config.json")
+	cfg, err := config.LoadConfig("")
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
@@ -33,7 +33,7 @@ func main() {
 	}
 
 	// try to save the config in case it was not found
-	if err := cfg.SaveConfig("config.json"); err != nil {
+	if err := cfg.SaveConfig(""); err != nil {
 		log.Printf("Failed to save configuration: %v", err)
 	}
 
