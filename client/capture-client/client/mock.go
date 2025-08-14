@@ -71,23 +71,16 @@ func (m *MockCaptureServerClient) GetClientSettings(ctx context.Context) (*model
 }
 
 // UploadClip simulates uploading a video clip
-func (m *MockCaptureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string) error {
-	log.Printf("[MOCK] Uploading clip: %d bytes, type: %s", len(videoData), mimeType)
+func (m *MockCaptureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool) error {
+	log.Printf("[MOCK] Uploading clip: %d bytes, type: %s, duration: %v, motion: %v", len(videoData), mimeType, duration, hasMotion)
 
 	// Generate filename using server's clip title logic
 	timestamp := time.Now().UTC().Format("2006-01-02T15-04-05")
 
-	// Estimate duration based on file size (rough approximation for testing)
-	// Assume ~1MB per 10 seconds for compressed video
-	estimatedDurationSeconds := float64(len(videoData)) / (1024 * 1024) * 10
-	if estimatedDurationSeconds < 5 {
-		estimatedDurationSeconds = 30 // Default fallback
-	}
+	// Use the actual duration passed in
+	durationStr := fmt.Sprintf("%.0f", duration.Seconds())
 
-	durationStr := fmt.Sprintf("%.0f", estimatedDurationSeconds)
-
-	// Simulate motion detection result (alternating for testing)
-	hasMotion := len(m.uploads)%2 == 0 // Alternate between motion/no motion
+	// Simulate motion detection result (use the actual hasMotion value)
 	motionStr := "nomotion"
 	if hasMotion {
 		motionStr = "motion"

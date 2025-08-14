@@ -1,44 +1,114 @@
 {{ define "content" }}
 <h2>Clips</h2>
+
+<!-- Filter Controls -->
+<div class="filter-container">
+    <form method="get" action="/clips" class="filter-form">
+        <div class="filter-row">
+            <div class="form-group">
+                <label for="clientId">Client</label>
+                <select id="clientId" name="clientId">
+                    <option value="">All Clients</option>
+                    {{ range .Clients }}
+                    <option value="{{ .ID }}" {{ if eq .ID $.FilterValues.ClientID }}selected{{ end }}>{{ .ID }}</option>
+                    {{ end }}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="startDate">Start Date</label>
+                <input type="date" id="startDate" name="startDate" value="{{ .FilterValues.StartDate }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="startTime">Start Time (optional)</label>
+                <input type="time" id="startTime" name="startTime" value="{{ .FilterValues.StartTime }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="endDate">End Date</label>
+                <input type="date" id="endDate" name="endDate" value="{{ .FilterValues.EndDate }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="endTime">End Time (optional)</label>
+                <input type="time" id="endTime" name="endTime" value="{{ .FilterValues.EndTime }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="hasMotion">Motion</label>
+                <select id="hasMotion" name="hasMotion">
+                    <option value="">All</option>
+                    <option value="true" {{ if eq .FilterValues.HasMotion "true" }}selected{{ end }}>Motion</option>
+                    <option value="false" {{ if eq .FilterValues.HasMotion "false" }}selected{{ end }}>No Motion</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn">Filter</button>
+                <a href="/clips" class="btn btn-secondary">Clear</a>
+            </div>
+        </div>
+        
+        <!-- Preserve pagination settings -->
+        <input type="hidden" name="pageSize" value="{{ .PageSize }}">
+    </form>
+</div>
+
+{{ if .Error }}
+<p class="error">{{ .Error }}</p>
+{{ end }}
+
 {{ if .Clips }}
-<table>
-    <thead>
-        <tr>
-            <th>Thumbnail</th>
-            <th>Title</th>
-            <th>Client ID</th>
-            <th>Timestamp</th>
-            <th>Duration</th>
-            <th>Has Motion</th>
-        </tr>
-    </thead>
-    <tbody>
-        {{ range .Clips }}
-        <tr>
-            <td>
-                <a href="/clips/{{ .ID }}/video">
-                    <img src="/clips/{{ .ID }}/thumbnail" alt="Thumbnail for clip {{ .ID }}" width="160">
-                </a>
-            </td>
-            <td>{{ .Title }}</td>
-            <td>{{ .ClientID }}</td>
-            <td>{{ .TimeStamp.Format "2006-01-02 15:04:05" }}</td>
-            <td>{{ .Duration }}s</td>
-            <td>{{ .HasMotion }}</td>
-        </tr>
-        {{ end }}
-    </tbody>
-</table>
+<div class="results-summary">
+    <p>Showing {{ len .Clips }} of {{ .Total }} clips</p>
+</div>
+
+<div class="clips-grid">
+    {{ range .Clips }}
+    <div class="clip-card" onclick="window.location.href='/clips/{{ .ID }}'" style="cursor: pointer;">
+        <div class="clip-thumbnail">
+            <img src="/clips/{{ .ID }}/thumbnail" alt="Thumbnail for clip {{ .ID }}" loading="lazy" 
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="no-thumbnail" style="display: none;">
+                <span>No Thumbnail</span>
+            </div>
+            <div class="clip-duration">{{ .Duration }}s</div>
+            <div class="motion-indicator {{ if .HasMotion }}motion{{ else }}no-motion{{ end }}">
+                {{ if .HasMotion }}Motion{{ else }}No Motion{{ end }}
+            </div>
+        </div>
+        
+        <div class="clip-info">
+            <h3 class="clip-title">{{ .Title }}</h3>
+            <div class="clip-meta">
+                <div class="meta-item">
+                    <span class="meta-label">Client:</span>
+                    <span class="meta-value">{{ .ClientID }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Date:</span>
+                    <span class="meta-value">{{ (.TimeStamp | toLocal).Format "2006-01-02" }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Time:</span>
+                    <span class="meta-value">{{ (.TimeStamp | toLocal).Format "15:04:05" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+</div>
 
 <div class="pagination">
     {{ if gt .Page 1 }}
-        <a href="/clips?page={{ .Page | add -1 }}&pageSize={{ .PageSize }}">&laquo; Previous</a>
+        <a href="/clips?page={{ .Page | add -1 }}&pageSize={{ .PageSize }}{{ if .FilterValues.ClientID }}&clientId={{ .FilterValues.ClientID }}{{ end }}{{ if .FilterValues.StartTime }}&startTime={{ .FilterValues.StartTime }}{{ end }}{{ if .FilterValues.EndTime }}&endTime={{ .FilterValues.EndTime }}{{ end }}{{ if .FilterValues.HasMotion }}&hasMotion={{ .FilterValues.HasMotion }}{{ end }}">&laquo; Previous</a>
     {{ end }}
 
     <span>Page {{ .Page }} of {{ .TotalPages }}</span>
 
     {{ if lt .Page .TotalPages }}
-        <a href="/clips?page={{ .Page | add 1 }}&pageSize={{ .PageSize }}">Next &raquo;</a>
+        <a href="/clips?page={{ .Page | add 1 }}&pageSize={{ .PageSize }}{{ if .FilterValues.ClientID }}&clientId={{ .FilterValues.ClientID }}{{ end }}{{ if .FilterValues.StartTime }}&startTime={{ .FilterValues.StartTime }}{{ end }}{{ if .FilterValues.EndTime }}&endTime={{ .FilterValues.EndTime }}{{ end }}{{ if .FilterValues.HasMotion }}&hasMotion={{ .FilterValues.HasMotion }}{{ end }}">Next &raquo;</a>
     {{ end }}
 </div>
 

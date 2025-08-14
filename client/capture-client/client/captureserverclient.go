@@ -17,7 +17,7 @@ import (
 // CaptureServerClient handles communication with the capture server
 type CaptureServerClient interface {
 	GetClientSettings(ctx context.Context) (*models.ClientSettings, error)
-	UploadClip(ctx context.Context, videoData []byte, mimeType string) error
+	UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool) error
 }
 
 // captureServerClient implements ClientService using HTTP
@@ -72,7 +72,7 @@ func (s *captureServerClient) GetClientSettings(ctx context.Context) (*models.Cl
 }
 
 // UploadClip uploads a video clip to the server
-func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string) error {
+func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool) error {
 	url := fmt.Sprintf("%s/api/clips", s.serverURL)
 
 	// Create multipart form
@@ -80,12 +80,22 @@ func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, 
 	writer := multipart.NewWriter(&buf)
 
 	// Add timestamp field
-	if err := writer.WriteField("timestamp", time.Now().Format(time.RFC3339)); err != nil {
+	if err := writer.WriteField("timestamp", time.Now().UTC().Format(time.RFC3339)); err != nil {
 		return fmt.Errorf("failed to write timestamp field: %w", err)
 	}
 
-	// Add has_motion field - assume true since we're uploading
-	if err := writer.WriteField("has_motion", "true"); err != nil {
+	// Add duration field using the known duration from client settings
+	durationStr := fmt.Sprintf("%.1f", duration.Seconds())
+	if err := writer.WriteField("duration", durationStr); err != nil {
+		return fmt.Errorf("failed to write duration field: %w", err)
+	}
+
+	// Add has_motion field using the actual motion detection result
+	motionStr := "false"
+	if hasMotion {
+		motionStr = "true"
+	}
+	if err := writer.WriteField("has_motion", motionStr); err != nil {
 		return fmt.Errorf("failed to write has_motion field: %w", err)
 	}
 
@@ -121,7 +131,7 @@ func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
 	}

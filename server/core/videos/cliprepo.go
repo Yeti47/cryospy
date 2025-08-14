@@ -16,6 +16,9 @@ type ClipRepository interface {
 	// GetByID retrieves a Clip by its ID
 	GetByID(ctx context.Context, id string) (*Clip, error)
 
+	// GetInfoByID retrieves ClipInfo (metadata only) by its ID
+	GetInfoByID(ctx context.Context, id string) (*ClipInfo, error)
+
 	// Query retrieves Clips based on the provided query parameters
 	// Returns clips and total count of matching records (before pagination)
 	Query(ctx context.Context, query ClipQuery) ([]*Clip, int, error)
@@ -113,6 +116,42 @@ func (r *SQLiteClipRepository) GetByID(ctx context.Context, id string) (*Clip, e
 	clip.Duration = time.Duration(durationNanos)
 	clip.HasMotion = db.IntToBool(hasMotionInt)
 	return clip, nil
+}
+
+// GetInfoByID retrieves ClipInfo (metadata only) by its ID
+func (r *SQLiteClipRepository) GetInfoByID(ctx context.Context, id string) (*ClipInfo, error) {
+	query := `
+	SELECT id, client_id, title, timestamp, duration, has_motion, LENGTH(encrypted_video) as video_size,
+		   video_width, video_height, video_mime_type, thumbnail_width, thumbnail_height, thumbnail_mime_type
+	FROM clips WHERE id = ?`
+
+	row := r.db.QueryRowContext(ctx, query, id)
+
+	clipInfo := &ClipInfo{}
+	var durationNanos int64
+	var timestampStr string
+	var hasMotionInt int
+	err := row.Scan(
+		&clipInfo.ID, &clipInfo.ClientID, &clipInfo.Title, &timestampStr, &durationNanos, &hasMotionInt, &clipInfo.VideoSize,
+		&clipInfo.VideoWidth, &clipInfo.VideoHeight, &clipInfo.VideoMimeType,
+		&clipInfo.ThumbnailWidth, &clipInfo.ThumbnailHeight, &clipInfo.ThumbnailMimeType,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get clip info by ID: %w", err)
+	}
+
+	// Convert string timestamp back to time.Time
+	clipInfo.TimeStamp, err = db.StringToTime(timestampStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse timestamp: %w", err)
+	}
+
+	clipInfo.Duration = time.Duration(durationNanos)
+	clipInfo.HasMotion = db.IntToBool(hasMotionInt)
+	return clipInfo, nil
 }
 
 // Query retrieves Clips based on the provided query parameters
@@ -219,7 +258,7 @@ func (r *SQLiteClipRepository) QueryInfo(ctx context.Context, query ClipQuery) (
 		var timestampStr string
 		var hasMotionInt int
 		err := rows.Scan(
-			&clipInfo.ID, &clipInfo.ClientID, &clipInfo.Title, &timestampStr, &durationNanos, &hasMotionInt,
+			&clipInfo.ID, &clipInfo.ClientID, &clipInfo.Title, &timestampStr, &durationNanos, &hasMotionInt, &clipInfo.VideoSize,
 			&clipInfo.VideoWidth, &clipInfo.VideoHeight, &clipInfo.VideoMimeType,
 			&clipInfo.ThumbnailWidth, &clipInfo.ThumbnailHeight, &clipInfo.ThumbnailMimeType,
 		)
@@ -304,7 +343,7 @@ func (r *SQLiteClipRepository) getQueryCount(ctx context.Context, query ClipQuer
 func (r *SQLiteClipRepository) buildQuerySQL(query ClipQuery, metadataOnly bool) (string, []interface{}) {
 	var selectClause string
 	if metadataOnly {
-		selectClause = `SELECT id, client_id, title, timestamp, duration, has_motion, video_width, video_height, video_mime_type,
+		selectClause = `SELECT id, client_id, title, timestamp, duration, has_motion, LENGTH(encrypted_video) as video_size, video_width, video_height, video_mime_type,
 						thumbnail_width, thumbnail_height, thumbnail_mime_type`
 	} else {
 		selectClause = `SELECT id, client_id, title, timestamp, duration, has_motion, encrypted_video, video_width, video_height, video_mime_type,

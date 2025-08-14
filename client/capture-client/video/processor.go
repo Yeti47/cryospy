@@ -21,6 +21,10 @@ type Processor interface {
 	StartContinuousCapture(device string, chunkDuration time.Duration, onChunkReady func(string)) error
 	StopContinuousCapture()
 	CleanupTempFiles(maxAge time.Duration) error
+	GetOutputMimeType() string
+	GetOutputFileExtension() string
+	GetCaptureFileExtension() string
+	GetVideoDuration(videoPath string) (time.Duration, error)
 }
 
 // VideoProcessor implements Processor using gocv for capture/motion detection and goffmpeg for processing
@@ -149,6 +153,98 @@ func (p *VideoProcessor) ProcessClip(inputPath, outputPath string, settings *mod
 	return nil
 }
 
+// GetOutputMimeType returns the MIME type for the configured video output format
+func (p *VideoProcessor) GetOutputMimeType() string {
+	format := strings.ToLower(p.config.VideoOutputFormat)
+	switch format {
+	case "mp4":
+		return "video/mp4"
+	case "avi":
+		return "video/x-msvideo"
+	case "mkv":
+		return "video/x-matroska"
+	case "webm":
+		return "video/webm"
+	case "mov":
+		return "video/quicktime"
+	default:
+		// Default to mp4 if unknown format
+		return "video/mp4"
+	}
+}
+
+// GetOutputFileExtension returns the file extension for the configured video output format
+func (p *VideoProcessor) GetOutputFileExtension() string {
+	format := strings.ToLower(p.config.VideoOutputFormat)
+	switch format {
+	case "mp4":
+		return ".mp4"
+	case "avi":
+		return ".avi"
+	case "mkv":
+		return ".mkv"
+	case "webm":
+		return ".webm"
+	case "mov":
+		return ".mov"
+	default:
+		// Default to mp4 if unknown format
+		return ".mp4"
+	}
+}
+
+// GetCaptureFileExtension returns the file extension for the configured capture codec
+func (p *VideoProcessor) GetCaptureFileExtension() string {
+	codec := strings.ToUpper(p.config.CaptureCodec)
+	switch codec {
+	case "MJPG":
+		return ".avi" // MJPG is typically stored in AVI containers
+	case "MP4V":
+		return ".mp4"
+	case "YUYV":
+		return ".avi" // Raw formats typically use AVI
+	case "H264":
+		return ".mp4"
+	default:
+		// Default to avi for most capture codecs
+		return ".avi"
+	}
+}
+
+// GetVideoDuration extracts the actual duration from video metadata using goffmpeg's efficient probing
+// This uses goffmpeg's internal ffprobe functionality which is much more efficient than exec calls
+func (p *VideoProcessor) GetVideoDuration(videoPath string) (time.Duration, error) {
+	// Create transcoder instance for metadata probing only
+	trans := new(transcoder.Transcoder)
+
+	// Initialize transcoder - this runs ffprobe internally to get metadata
+	err := trans.Initialize(videoPath, "") // Empty output path since we're just probing
+	if err != nil {
+		return 0, fmt.Errorf("failed to probe video metadata: %w", err)
+	}
+
+	// Get the duration from the already-parsed metadata
+	// The Initialize method runs ffprobe and stores the result in MediaFile metadata
+	durationStr := trans.MediaFile().Metadata().Format.Duration
+	if durationStr == "" {
+		return 0, fmt.Errorf("empty duration in video metadata")
+	}
+
+	// Parse duration string to float64 seconds
+	durationSeconds, err := strconv.ParseFloat(durationStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse duration '%s': %w", durationStr, err)
+	}
+
+	if durationSeconds <= 0 {
+		return 0, fmt.Errorf("invalid or zero duration: %f seconds", durationSeconds)
+	}
+
+	// Convert to time.Duration
+	duration := time.Duration(durationSeconds * float64(time.Second))
+	return duration, nil
+}
+
 // DetectMotion analyzes a video file for motion using gocv
 func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
 	// Open video file
@@ -271,9 +367,10 @@ func (p *VideoProcessor) captureLoop(chunkDuration time.Duration, onChunkReady f
 
 	chunkCount := 0
 	for p.capturing {
-		// Create unique filename for this chunk
+		// Create unique filename for this chunk using the appropriate extension for the capture codec
 		chunkCount++
-		chunkFile := fmt.Sprintf("%s/chunk_%d_%d.mp4", p.tempDir, time.Now().Unix(), chunkCount)
+		captureExtension := p.GetCaptureFileExtension()
+		chunkFile := fmt.Sprintf("%s/chunk_%d_%d%s", p.tempDir, time.Now().Unix(), chunkCount, captureExtension)
 
 		// Record chunk
 		err := p.recordChunk(chunkFile, chunkDuration)

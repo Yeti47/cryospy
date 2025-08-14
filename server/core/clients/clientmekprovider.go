@@ -2,12 +2,14 @@ package clients
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 
 	"github.com/yeti47/cryospy/server/core/encryption"
 )
 
 type ClientMekProvider interface {
-	// UncoverMek decrypts the MEK for the client using the provided secret
+	// UncoverMek decrypts the MEK for the client using the provided secret.
+	// The clientSecret parameter must be hex-encoded.
 	UncoverMek(clientID, clientSecret string) ([]byte, error)
 }
 
@@ -25,6 +27,8 @@ func NewClientMekProvider(encryptor encryption.Encryptor, clientRepo ClientRepos
 	}
 }
 
+// UncoverMek decrypts the MEK for the client using the provided secret.
+// The clientSecret parameter must be hex-encoded.
 func (p *clientMekProvider) UncoverMek(clientID, clientSecret string) ([]byte, error) {
 
 	// Verify the client secret
@@ -47,8 +51,14 @@ func (p *clientMekProvider) UncoverMek(clientID, clientSecret string) ([]byte, e
 		return nil, err
 	}
 
-	// Derive the encryption key from the client secret using the salt
-	derivedKey, err := p.encryptor.DeriveKeyFromSecret([]byte(clientSecret), keyDerivationSalt)
+	// Derive the encryption key from the client secret using the salt.
+	// The client secret is hex-encoded, so we need to decode it first
+	clientSecretBytes, err := hex.DecodeString(clientSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	derivedKey, err := p.encryptor.DeriveKeyFromSecret(clientSecretBytes, keyDerivationSalt)
 	if err != nil {
 		return nil, err
 	}

@@ -39,12 +39,12 @@ func LoadConfig(filename string) (*Config, error) {
 				SettingsSyncSeconds: 300, // 5 minutes default
 
 				// Video processing defaults
-				VideoCodec:        "mpeg4", // Native FFmpeg codec that works on most systems
-				VideoOutputFormat: "mp4",   // Standard MP4 container
-				VideoBitRate:      "500k",  // 500 Kbps for reasonable file sizes
-				CaptureCodec:      "MJPG",  // Motion JPEG for reliable capture
-				CaptureFrameRate:  15.0,    // 15 FPS for smaller files
-				MotionSensitivity: 10.0,    // 10% of pixels changing for motion detection
+				VideoCodec:        "libopenh264", // Open-source H.264 codec that works on Fedora
+				VideoOutputFormat: "mp4",         // Standard MP4 container
+				VideoBitRate:      "500k",        // 500 Kbps for reasonable file sizes
+				CaptureCodec:      "MJPG",        // Motion JPEG for reliable capture
+				CaptureFrameRate:  15.0,          // 15 FPS for smaller files
+				MotionSensitivity: 10.0,          // 10% of pixels changing for motion detection
 			}
 
 			if err := saveConfig(filename, defaultConfig); err != nil {

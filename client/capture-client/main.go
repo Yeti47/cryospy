@@ -18,6 +18,14 @@ import (
 	"github.com/yeti47/cryospy/client/capture-client/video"
 )
 
+// UploadInfo contains information needed for uploading a video clip
+type UploadInfo struct {
+	FilePath  string
+	HasMotion bool
+	MimeType  string
+	Duration  time.Duration
+}
+
 func main() {
 	// Parse command line flags
 	testMode := flag.Bool("test", false, "Run in test mode with mock server client")
@@ -111,7 +119,7 @@ func main() {
 		settings:       settings,
 		clientService:  clientService,
 		processor:      processor,
-		uploadQueue:    make(chan string, cfg.BufferSize), // Use configured buffer size
+		uploadQueue:    make(chan UploadInfo, cfg.BufferSize), // Use configured buffer size
 		processingClip: false,
 		shutdown:       make(chan struct{}),
 	}
@@ -150,7 +158,7 @@ type CaptureApp struct {
 	settingsMu     sync.RWMutex // Protects settings access
 	clientService  client.CaptureServerClient
 	processor      video.Processor
-	uploadQueue    chan string
+	uploadQueue    chan UploadInfo
 	processingClip bool
 	mu             sync.Mutex
 	shutdown       chan struct{}
@@ -226,19 +234,34 @@ func (app *CaptureApp) processChunk(rawChunkPath string) {
 	}
 
 	// Process the chunk (compress, downscale, etc.)
-	// Create proper output filename by replacing extension
-	baseName := strings.TrimSuffix(rawChunkPath, ".mp4")
-	processedPath := baseName + "_processed.mp4"
+	// Create proper output filename using the configured output format
+	captureExtension := app.processor.GetCaptureFileExtension()
+	baseName := strings.TrimSuffix(rawChunkPath, captureExtension)
+	outputExtension := app.processor.GetOutputFileExtension()
+	processedPath := baseName + "_processed" + outputExtension
 	err = app.processor.ProcessClip(rawChunkPath, processedPath, settings)
 	if err != nil {
 		log.Printf("Failed to process chunk %s: %v", rawChunkPath, err)
 		return
 	}
 
+	// Get the actual duration from the processed video metadata
+	actualDuration, err := app.processor.GetVideoDuration(processedPath)
+	if err != nil {
+		log.Printf("Failed to get video duration for %s: %v, using settings duration as fallback", processedPath, err)
+		actualDuration = settings.ChunkDuration()
+	}
+
 	// Queue for upload
+	uploadInfo := UploadInfo{
+		FilePath:  processedPath,
+		HasMotion: hasMotion,
+		MimeType:  app.processor.GetOutputMimeType(),
+		Duration:  actualDuration,
+	}
 	select {
-	case app.uploadQueue <- processedPath:
-		log.Printf("Queued %s for upload", processedPath)
+	case app.uploadQueue <- uploadInfo:
+		log.Printf("Queued %s for upload (motion: %v, duration: %v, type: %s)", processedPath, hasMotion, actualDuration, uploadInfo.MimeType)
 	default:
 		log.Printf("Upload queue full, dropping %s", processedPath)
 		os.Remove(processedPath)
@@ -249,8 +272,8 @@ func (app *CaptureApp) processChunk(rawChunkPath string) {
 func (app *CaptureApp) uploadWorker() {
 	for {
 		select {
-		case processedPath := <-app.uploadQueue:
-			app.uploadChunk(processedPath)
+		case uploadInfo := <-app.uploadQueue:
+			app.uploadChunk(uploadInfo.FilePath, uploadInfo.HasMotion, uploadInfo.MimeType, uploadInfo.Duration)
 		case <-app.shutdown:
 			return
 		}
@@ -333,10 +356,10 @@ func (app *CaptureApp) getSettings() *models.ClientSettings {
 }
 
 // uploadChunk uploads a processed video chunk to the server
-func (app *CaptureApp) uploadChunk(processedPath string) {
+func (app *CaptureApp) uploadChunk(processedPath string, hasMotion bool, mimeType string, duration time.Duration) {
 	defer os.Remove(processedPath) // Clean up after upload
 
-	log.Printf("Uploading %s...", processedPath)
+	log.Printf("Uploading %s (motion: %v, duration: %v, type: %s)...", processedPath, hasMotion, duration, mimeType)
 
 	// Read the video file
 	videoData, err := os.ReadFile(processedPath)
@@ -349,7 +372,8 @@ func (app *CaptureApp) uploadChunk(processedPath string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	err = app.clientService.UploadClip(ctx, videoData, "video/mp4")
+	// Use the pre-determined values from the upload queue
+	err = app.clientService.UploadClip(ctx, videoData, mimeType, duration, hasMotion)
 	if err != nil {
 		log.Printf("Failed to upload %s: %v", processedPath, err)
 		// TODO: Implement retry logic or save to disk for later retry

@@ -41,7 +41,7 @@
                 <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete client \'{{ .ID }}\'?');">Delete</button>
             </form>
         </div>
-        <small>Created: {{ .CreatedAt.Format "2006-01-02 15:04:05" }}<br>Updated: {{ .UpdatedAt.Format "2006-01-02 15:04:05" }}</small>
+        <small>Created: {{ (.CreatedAt | toLocal).Format "2006-01-02 15:04:05" }}<br>Updated: {{ (.UpdatedAt | toLocal).Format "2006-01-02 15:04:05" }}</small>
     </div>
     {{ end }}
 </div>

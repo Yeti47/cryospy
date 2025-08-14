@@ -18,6 +18,8 @@ type ClipReader interface {
 	QueryClipInfos(query ClipQuery) ([]*ClipInfo, int, error)
 	// GetClipByID retrieves a single clip by ID with decrypted data
 	GetClipByID(clipID string, mekStore encryption.MekStore) (*DecryptedClip, error)
+	// GetClipInfoByID retrieves clip metadata by ID without decrypted data
+	GetClipInfoByID(clipID string) (*ClipInfo, error)
 	// GetClipThumbnail retrieves the thumbnail for a clip by ID with decrypted data
 	GetClipThumbnail(clipID string, mekStore encryption.MekStore) (*Thumbnail, error)
 }
@@ -108,6 +110,23 @@ func (r *clipReader) GetClipByID(clipID string, mekStore encryption.MekStore) (*
 
 	r.logger.Info(fmt.Sprintf("Successfully retrieved and decrypted clip %s", clipID))
 	return decryptedClip, nil
+}
+
+func (r *clipReader) GetClipInfoByID(clipID string) (*ClipInfo, error) {
+	// Get clip info from repository (no decryption needed)
+	clipInfo, err := r.clipRepo.GetInfoByID(context.Background(), clipID)
+	if err != nil {
+		r.logger.Error(fmt.Sprintf("Failed to get clip info %s from repository", clipID), err)
+		return nil, err
+	}
+
+	if clipInfo == nil {
+		r.logger.Warn(fmt.Sprintf("Clip info not found for ID %s", clipID))
+		return nil, nil
+	}
+
+	r.logger.Info(fmt.Sprintf("Successfully retrieved clip info %s", clipID))
+	return clipInfo, nil
 }
 
 // decryptClip decrypts a clip's video and thumbnail data

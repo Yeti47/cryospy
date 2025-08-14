@@ -29,6 +29,7 @@ type ClipInfo struct {
 	TimeStamp         time.Time
 	Duration          time.Duration
 	HasMotion         bool
+	VideoSize         int64 // Size of the encrypted video in bytes
 	VideoWidth        int
 	VideoHeight       int
 	VideoMimeType     string

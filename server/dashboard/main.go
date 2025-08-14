@@ -98,7 +98,7 @@ func main() {
 	// Set up handlers
 	authHandler := handlers.NewAuthHandler(logger, mekService, mekStoreFactory)
 	clientHandler := handlers.NewClientHandler(logger, clientService, mekStoreFactory)
-	clipHandler := handlers.NewClipHandler(logger, clipReader, mekStoreFactory)
+	clipHandler := handlers.NewClipHandler(logger, clipReader, clientService, mekStoreFactory)
 
 	// Set up middleware
 	authMiddleware := middleware.NewAuthMiddleware(logger, mekService, mekStoreFactory)
@@ -133,7 +133,9 @@ func main() {
 		clipGroup := authedGroup.Group("/clips")
 		{
 			clipGroup.GET("", clipHandler.ListClips)
+			clipGroup.GET("/:id", clipHandler.ViewClip)
 			clipGroup.GET("/:id/thumbnail", clipHandler.GetThumbnail)
+			clipGroup.GET("/:id/video", clipHandler.GetVideo)
 		}
 	}
 
@@ -152,6 +154,35 @@ func createTemplateRenderer() multitemplate.Renderer {
 		"add": func(a, b int) int {
 			return a + b
 		},
+		"div": func(a, b float64) float64 {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
+		"printf": func(format string, args ...interface{}) string {
+			return fmt.Sprintf(format, args...)
+		},
+		"len": func(v interface{}) int {
+			switch s := v.(type) {
+			case []byte:
+				return len(s)
+			case string:
+				return len(s)
+			default:
+				return 0
+			}
+		},
+		"formatFileSize": func(bytes int64) string {
+			if bytes == 0 {
+				return "0 MB"
+			}
+			mb := float64(bytes) / 1048576.0
+			return fmt.Sprintf("%.2f MB", mb)
+		},
+		"toLocal": func(t time.Time) time.Time {
+			return t.Local()
+		},
 	}
 
 	r.AddFromFilesFuncs("layout", funcMap, "web/templates/layout.html")
@@ -160,5 +191,6 @@ func createTemplateRenderer() multitemplate.Renderer {
 	r.AddFromFilesFuncs("clients", funcMap, "web/templates/layout.html", "web/templates/clients.html")
 	r.AddFromFilesFuncs("new-client", funcMap, "web/templates/layout.html", "web/templates/new-client.html")
 	r.AddFromFilesFuncs("clips", funcMap, "web/templates/layout.html", "web/templates/clips.html")
+	r.AddFromFilesFuncs("clip-detail", funcMap, "web/templates/layout.html", "web/templates/clip-detail.html")
 	return r
 }

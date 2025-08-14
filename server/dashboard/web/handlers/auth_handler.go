@@ -53,7 +53,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// Decrypt the MEK to verify the password
 	encryptor := encryption.NewAESEncryptor()
-	_, err = encryption.DecryptMek(mek, password, encryptor)
+	decryptedMek, err := encryption.DecryptMek(mek, password, encryptor)
 	if err != nil {
 		h.logger.Warn("Failed login attempt", "error", err)
 		c.HTML(http.StatusUnauthorized, "login", gin.H{
@@ -63,9 +63,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// On success, store the MEK in the session
+	// On success, store the DECRYPTED MEK in the session
 	mekStore := h.mekStoreFactory(c)
-	if err := mekStore.SetMek([]byte(mek.EncryptedEncryptionKey)); err != nil {
+	if err := mekStore.SetMek(decryptedMek); err != nil {
 		h.logger.Error("Failed to set MEK in session", err)
 		c.HTML(http.StatusInternalServerError, "login", gin.H{
 			"Title": "Login",
@@ -123,9 +123,21 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 		return
 	}
 
-	// Store the new MEK in the session to log the user in
+	// Decrypt the MEK for session storage
+	encryptor := encryption.NewAESEncryptor()
+	decryptedMek, err := encryption.DecryptMek(mek, password, encryptor)
+	if err != nil {
+		h.logger.Error("Failed to decrypt newly created MEK", err)
+		c.HTML(http.StatusInternalServerError, "setup", gin.H{
+			"Title": "Setup",
+			"Error": "Failed to initialize encryption.",
+		})
+		return
+	}
+
+	// Store the DECRYPTED MEK in the session to log the user in
 	mekStore := h.mekStoreFactory(c)
-	if err := mekStore.SetMek([]byte(mek.EncryptedEncryptionKey)); err != nil {
+	if err := mekStore.SetMek(decryptedMek); err != nil {
 		h.logger.Error("Failed to set MEK in session after setup", err)
 		c.HTML(http.StatusInternalServerError, "setup", gin.H{
 			"Title": "Setup",

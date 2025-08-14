@@ -3,9 +3,9 @@ package videos
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
-	"github.com/xfrr/goffmpeg/transcoder"
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 )
 
@@ -84,28 +84,20 @@ func (g *FFmpegThumbnailGenerator) GenerateThumbnail(videoData []byte, videoMeta
 	// Calculate optimal thumbnail dimensions
 	thumbWidth, thumbHeight := g.calculateThumbnailDimensions(videoMeta.Width, videoMeta.Height)
 
-	// Create transcoder instance
-	trans := new(transcoder.Transcoder)
+	// Use direct FFmpeg command for thumbnail extraction
+	cmd := exec.Command("ffmpeg",
+		"-i", videoFile, // Input file
+		"-ss", "00:00:01", // Seek to 1 second
+		"-frames:v", "1", // Extract one frame
+		"-vf", fmt.Sprintf("scale=%d:%d", thumbWidth, thumbHeight), // Scale to calculated dimensions
+		"-q:v", "2", // High quality
+		"-y",          // Overwrite output file
+		thumbnailFile) // Output file
 
-	// Initialize transcoder with input file
-	err = trans.Initialize(videoFile, thumbnailFile)
+	// Run the command
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize transcoder: %w", err)
-	}
-
-	// Set transcoder options for thumbnail extraction with calculated dimensions
-	trans.MediaFile().SetSeekTime("00:00:01")                                             // Seek to 1 second
-	trans.MediaFile().SetVideoFilter(fmt.Sprintf("scale=%d:%d", thumbWidth, thumbHeight)) // Use calculated dimensions
-	trans.MediaFile().SetVideoCodec("png")                                                // Output as PNG
-	trans.MediaFile().SetSkipAudio(true)                                                  // Skip audio processing
-	trans.MediaFile().SetOutputFormat("image2")                                           // Single image output
-	trans.MediaFile().SetVideoBitRate("1")                                                // Minimal bitrate for single frame
-
-	// Process the video to extract thumbnail
-	done := trans.Run(true) // true = progress reporting
-	err = <-done
-	if err != nil {
-		return nil, fmt.Errorf("ffmpeg transcoding failed: %w", err)
+		return nil, fmt.Errorf("ffmpeg command failed: %w, output: %s", err, string(output))
 	}
 
 	// Read the generated thumbnail
