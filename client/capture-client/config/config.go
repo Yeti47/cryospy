@@ -21,7 +21,6 @@ type Config struct {
 	VideoBitRate      string  `json:"video_bitrate"`       // Video bitrate for compression (e.g., "500k", "1M")
 	CaptureCodec      string  `json:"capture_codec"`       // Codec for initial capture (e.g., "MJPG", "MP4V")
 	CaptureFrameRate  float64 `json:"capture_framerate"`   // Frame rate for video capture (e.g., 15.0, 30.0)
-	MotionSensitivity float64 `json:"motion_sensitivity"`  // Motion detection sensitivity as percentage (e.g., 1.0 = 1% of pixels)
 	MotionMinArea     int     `json:"motion_min_area"`     // Minimum contour area to be considered motion
 }
 
@@ -45,8 +44,7 @@ func LoadConfig(filename string) (*Config, error) {
 				VideoBitRate:      "500k",
 				CaptureCodec:      "MJPG",
 				CaptureFrameRate:  15.0,
-				MotionSensitivity: 1.0,
-				MotionMinArea:     500, // Default minimum area for motion detection
+				MotionMinArea:     1000, // Default minimum area for motion detection
 			}
 			if err := saveConfig(filename, defaultConfig); err != nil {
 				return nil, fmt.Errorf("failed to create default config file: %w", err)
@@ -89,11 +87,8 @@ func LoadConfig(filename string) (*Config, error) {
 	if config.CaptureFrameRate == 0 {
 		config.CaptureFrameRate = 15.0
 	}
-	if config.MotionSensitivity == 0 {
-		config.MotionSensitivity = 10.0
-	}
 	if config.MotionMinArea == 0 {
-		config.MotionMinArea = 500
+		config.MotionMinArea = 1000
 	}
 
 	return &config, nil
@@ -152,9 +147,6 @@ func (c *Config) Override(overrides ConfigOverrides) {
 	}
 	if overrides.CaptureFrameRate != nil && *overrides.CaptureFrameRate > 0 {
 		c.CaptureFrameRate = *overrides.CaptureFrameRate
-	}
-	if overrides.MotionSensitivity != nil && *overrides.MotionSensitivity > 0 {
-		c.MotionSensitivity = *overrides.MotionSensitivity
 	}
 	if overrides.MotionMinArea != nil && *overrides.MotionMinArea > 0 {
 		c.MotionMinArea = *overrides.MotionMinArea

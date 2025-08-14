@@ -108,9 +108,9 @@ func main() {
 		log.Fatalf("Failed to create video processor: %v", err)
 	}
 
-	// Clean up old temporary files on startup (older than 1 hour)
+	// Clean up old temporary files on startup
 	log.Println("Cleaning up old temporary files...")
-	if err := processor.CleanupTempFiles(1 * time.Hour); err != nil {
+	if err := processor.CleanupTempFiles(); err != nil {
 		log.Printf("Warning: Failed to cleanup temp files: %v", err)
 	}
 
@@ -191,7 +191,16 @@ func (app *CaptureApp) onChunkReady(videoClip *models.VideoClip) {
 func (app *CaptureApp) processChunk(videoClip *models.VideoClip) {
 	rawChunkPath := videoClip.FilePath
 	recordingTimestamp := videoClip.Timestamp
-	
+
+	// Check if we're shutting down before starting processing
+	select {
+	case <-app.shutdown:
+		log.Printf("Skipping processing of %s due to shutdown", rawChunkPath)
+		os.Remove(rawChunkPath)
+		return
+	default:
+	}
+
 	app.mu.Lock()
 	app.processingClip = true
 	app.mu.Unlock()
@@ -235,6 +244,14 @@ func (app *CaptureApp) processChunk(videoClip *models.VideoClip) {
 	} else if stat.Size() < 1000 { // Minimum reasonable size for a video file
 		log.Printf("Chunk file %s is too small (%d bytes), skipping", rawChunkPath, stat.Size())
 		return
+	}
+
+	// Check again if we're shutting down before expensive processing
+	select {
+	case <-app.shutdown:
+		log.Printf("Skipping processing of %s due to shutdown", rawChunkPath)
+		return
+	default:
 	}
 
 	// Process the chunk (compress, downscale, etc.)
@@ -317,17 +334,23 @@ func (app *CaptureApp) syncSettings() {
 		return
 	}
 
-	// Check if settings have changed
-	app.settingsMu.Lock()
-	defer app.settingsMu.Unlock()
+	// Get current settings for comparison (minimize lock time)
+	app.settingsMu.RLock()
+	currentSettings := app.settings
+	app.settingsMu.RUnlock()
 
-	if app.settingsChanged(app.settings, newSettings) {
+	// Check if settings have changed (outside of lock)
+	if app.settingsChanged(currentSettings, newSettings) {
 		log.Println("Client settings have changed, updating...")
+
+		// Only hold the write lock for the actual update
+		app.settingsMu.Lock()
 		oldSettings := app.settings
 		app.settings = newSettings
+		app.settingsMu.Unlock()
 
 		log.Printf("Settings updated - Motion only mode: %v, Chunk duration: %v",
-			app.settings.MotionOnly, app.settings.ChunkDuration())
+			newSettings.MotionOnly, newSettings.ChunkDuration())
 
 		// If chunk duration changed, we might need to restart capture
 		// For now, just log it - a full restart would be complex
@@ -396,22 +419,35 @@ func (app *CaptureApp) stop() {
 	log.Println("Stopping upload worker...")
 	close(app.shutdown)
 
-	// Wait for any processing to complete
+	// Wait for any processing to complete with a timeout to avoid deadlocks
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Poll for completion with timeout
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	//nolint:S1000 // This pattern is intentional for graceful shutdown
 	for {
-		app.mu.Lock()
-		processing := app.processingClip
-		queueEmpty := len(app.uploadQueue) == 0
-		app.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			log.Println("Timeout waiting for processing to complete, forcing shutdown")
+			return
+		case <-ticker.C:
+			// Check if processing is complete
+			app.mu.Lock()
+			processing := app.processingClip
+			queueEmpty := len(app.uploadQueue) == 0
+			app.mu.Unlock()
 
-		if !processing && queueEmpty {
-			break
+			if !processing && queueEmpty {
+				log.Println("Capture application stopped")
+				return
+			}
+
+			log.Println("Waiting for processing and uploads to complete...")
 		}
-
-		log.Println("Waiting for processing and uploads to complete...")
-		time.Sleep(100 * time.Millisecond)
 	}
-
-	log.Println("Capture application stopped")
 }
 
 // simulateSettingsChanges simulates server-side settings changes for testing

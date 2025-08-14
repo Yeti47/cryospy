@@ -21,7 +21,7 @@ type Processor interface {
 	DetectMotion(videoPath string) (bool, error)
 	StartContinuousCapture(device string, chunkDuration time.Duration, onChunkReady func(*models.VideoClip)) error
 	StopContinuousCapture()
-	CleanupTempFiles(maxAge time.Duration) error
+	CleanupTempFiles() error
 	GetOutputMimeType() string
 	GetOutputFileExtension() string
 	GetCaptureFileExtension() string
@@ -246,17 +246,13 @@ func (p *VideoProcessor) GetVideoDuration(videoPath string) (time.Duration, erro
 	return duration, nil
 }
 
-// DetectMotion analyzes a video file for motion using gocv. This implementation is more robust
-// against noise and lighting changes by using blurring, thresholding, and contour analysis.
 func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
-	// Open video file
 	video, err := gocv.OpenVideoCapture(videoPath)
 	if err != nil {
 		return false, fmt.Errorf("failed to open video file: %w", err)
 	}
 	defer video.Close()
 
-	// Create motion detector
 	detector := gocv.NewBackgroundSubtractorMOG2()
 	defer detector.Close()
 
@@ -278,48 +274,70 @@ func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
 	kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Pt(3, 3))
 	defer kernel.Close()
 
+	prevBlurred := gocv.NewMat()
+	defer prevBlurred.Close()
+
 	motionDetected := false
 	frameCount := 0
-	maxFramesToCheck := 150 // Check more frames for better background establishment
+	maxFramesToCheck := 300
+	warmUpFrames := 30
 
-	// Minimum contour area to be considered motion. This can be tuned.
-	// It replaces the less reliable percentage-based sensitivity.
 	minArea := p.config.MotionMinArea
 	if minArea <= 0 {
-		minArea = 500 // Default value if not configured
+		minArea = 1000
 	}
 
 	for frameCount < maxFramesToCheck {
 		if ok := video.Read(&img); !ok {
-			break // End of video
+			break
 		}
-
 		if img.Empty() {
 			continue
 		}
 
-		// 1. Convert to grayscale
 		gocv.CvtColor(img, &gray, gocv.ColorBGRToGray)
-
-		// 2. Apply Gaussian blur to smooth the image and reduce noise
 		gocv.GaussianBlur(gray, &blurred, image.Pt(21, 21), 0, 0, gocv.BorderDefault)
 
-		// 3. Apply background subtraction
+		// Background subtraction
 		detector.Apply(blurred, &fgMask)
 
-		// 4. Threshold the foreground mask to get a binary image
-		gocv.Threshold(fgMask, &thresh, 25, 255, gocv.ThresholdBinary)
+		// Skip motion detection during warm-up
+		if frameCount < warmUpFrames {
+			frameCount++
+			continue
+		}
 
-		// 5. Dilate the thresholded image to fill in holes
+		// Frame differencing
+		if !prevBlurred.Empty() {
+			diff := gocv.NewMat()
+			defer diff.Close()
+			gocv.AbsDiff(blurred, prevBlurred, &diff)
+			gocv.Threshold(diff, &diff, 25, 255, gocv.ThresholdBinary)
+
+			nonZero := gocv.CountNonZero(diff)
+			if nonZero < 5000 {
+				blurred.CopyTo(&prevBlurred)
+				frameCount++
+				continue
+			}
+		}
+		blurred.CopyTo(&prevBlurred)
+
+		// Threshold and dilate
+		gocv.Threshold(fgMask, &thresh, 25, 255, gocv.ThresholdBinary)
 		gocv.Dilate(thresh, &thresh, kernel)
 
-		// 6. Find contours of the moving objects
 		contours := gocv.FindContours(thresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
 
-		// 7. Check if any contour is large enough
-		for i := range contours.Size() {
+		for i := 0; i < contours.Size(); i++ {
 			area := gocv.ContourArea(contours.At(i))
-			if area > float64(minArea) {
+			rect := gocv.BoundingRect(contours.At(i))
+			aspectRatio := float64(rect.Dx()) / float64(rect.Dy())
+
+			if area > float64(minArea) &&
+				rect.Dx() > 20 && rect.Dy() > 20 &&
+				aspectRatio < 3.0 {
+				fmt.Printf("Frame %d: Contour %d area = %.2f, aspectRatio = %.2f\n", frameCount, i, area, aspectRatio)
 				motionDetected = true
 				break
 			}
@@ -329,7 +347,6 @@ func (p *VideoProcessor) DetectMotion(videoPath string) (bool, error) {
 		if motionDetected {
 			break
 		}
-
 		frameCount++
 	}
 
@@ -544,40 +561,17 @@ func parseResolution(resolution string) string {
 }
 
 // CleanupTempFiles removes temporary files older than maxAge
-func (p *VideoProcessor) CleanupTempFiles(maxAge time.Duration) error {
-	entries, err := os.ReadDir(p.tempDir)
+func (p *VideoProcessor) CleanupTempFiles() error {
+	// just delete all files in the temp directory
+	files, err := os.ReadDir(p.tempDir)
 	if err != nil {
 		return fmt.Errorf("failed to read temp directory: %w", err)
 	}
-
-	cutoffTime := time.Now().Add(-maxAge)
-	var cleanedCount int
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			fmt.Printf("Warning: failed to get file info for %s: %v\n", entry.Name(), err)
-			continue
-		}
-
-		if info.ModTime().Before(cutoffTime) {
-			filePath := fmt.Sprintf("%s/%s", p.tempDir, entry.Name())
-			if err := os.Remove(filePath); err != nil {
-				fmt.Printf("Warning: failed to remove temp file %s: %v\n", filePath, err)
-			} else {
-				fmt.Printf("Cleaned up temp file: %s\n", filePath)
-				cleanedCount++
-			}
+	for _, file := range files {
+		filePath := fmt.Sprintf("%s/%s", p.tempDir, file.Name())
+		if err := os.Remove(filePath); err != nil {
+			fmt.Printf("Failed to delete temp file %s: %v\n", filePath, err)
 		}
 	}
-
-	if cleanedCount > 0 {
-		fmt.Printf("Cleaned up %d temporary files\n", cleanedCount)
-	}
-
 	return nil
 }
