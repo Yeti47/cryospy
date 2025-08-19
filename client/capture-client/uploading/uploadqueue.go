@@ -77,7 +77,13 @@ func (s *uploadQueue) Drain(timeout time.Duration) {
 
 // drainQueueWithCallback processes remaining uploads with optional callback
 func (s *uploadQueue) drainQueueWithCallback(timeout time.Duration, successCallback func(job *UploadJob)) {
-	timer := time.NewTimer(timeout)
+	// Calculate actual timeout based on queue length - each upload could take the full timeout
+	queueLength := len(s.uploadQueue)
+	actualTimeout := max(timeout*time.Duration(queueLength), timeout)
+
+	log.Printf("Draining upload queue with %d items, timeout: %v", queueLength, actualTimeout)
+
+	timer := time.NewTimer(actualTimeout)
 	defer timer.Stop()
 
 	for {
