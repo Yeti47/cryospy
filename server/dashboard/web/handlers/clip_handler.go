@@ -17,14 +17,16 @@ const defaultPageSize = 20
 type ClipHandler struct {
 	logger          logging.Logger
 	clipReader      videos.ClipReader
+	clipDeleter     videos.ClipDeleter
 	clientService   clients.ClientService
 	mekStoreFactory sessions.MekStoreFactory
 }
 
-func NewClipHandler(logger logging.Logger, clipReader videos.ClipReader, clientService clients.ClientService, mekStoreFactory sessions.MekStoreFactory) *ClipHandler {
+func NewClipHandler(logger logging.Logger, clipReader videos.ClipReader, clipDeleter videos.ClipDeleter, clientService clients.ClientService, mekStoreFactory sessions.MekStoreFactory) *ClipHandler {
 	return &ClipHandler{
 		logger:          logger,
 		clipReader:      clipReader,
+		clipDeleter:     clipDeleter,
 		clientService:   clientService,
 		mekStoreFactory: mekStoreFactory,
 	}
@@ -189,4 +191,27 @@ func (h *ClipHandler) GetVideo(c *gin.Context) {
 	c.Header("Accept-Ranges", "bytes")
 	c.Header("Content-Length", strconv.Itoa(len(clip.Video)))
 	c.Data(http.StatusOK, clip.VideoMimeType, clip.Video)
+}
+
+func (h *ClipHandler) DeleteClips(c *gin.Context) {
+	var request videos.DeleteClipsRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.logger.Error("Failed to bind JSON for clip deletion", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	response, err := h.clipDeleter.DeleteClips(request)
+	if err != nil {
+		h.logger.Error("Failed to delete clips", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to delete clips",
+		})
+		return
+	}
+
+	// Return the response with details about which clips were deleted and which failed
+	c.JSON(http.StatusOK, response)
 }

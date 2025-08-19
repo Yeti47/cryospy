@@ -50,39 +50,63 @@
 {{ end }}
 
 {{ if .Clips }}
-<div class="results-summary">
-    <p>Showing {{ len .Clips }} of {{ .Total }} clips</p>
+<div class="clips-actions">
+    <div class="results-summary">
+        <p>Showing {{ len .Clips }} of {{ .Total }} clips</p>
+    </div>
+    <div class="bulk-actions">
+        <div class="delete-actions">
+            <button type="button" id="deleteSelected" class="btn btn-danger" onclick="deleteSelectedClips()" style="display: none;">
+                Delete Selected
+            </button>
+        </div>
+        <div class="select-all-container">
+            <label class="select-all-checkbox">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <span class="select-all-checkmark"></span>
+                <span class="select-all-label">Select All</span>
+            </label>
+        </div>
+    </div>
 </div>
 
 <div class="clips-grid">
     {{ range .Clips }}
-    <div class="clip-card" onclick="window.location.href='/clips/{{ .ID }}'" style="cursor: pointer;">
-        <div class="clip-thumbnail">
-            <img src="/clips/{{ .ID }}/thumbnail" alt="Thumbnail for clip {{ .ID }}" loading="lazy" 
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-            <div class="no-thumbnail" style="display: none;">
-                <span>No Thumbnail</span>
-            </div>
-            <div class="clip-duration">{{ .Duration | formatDuration }}</div>
-            <div class="motion-indicator {{ if .HasMotion }}motion{{ else }}no-motion{{ end }}">
-                {{ if .HasMotion }}Motion{{ else }}No Motion{{ end }}
-            </div>
-        </div>
-        
-        <div class="clip-info">
-            <h3 class="clip-title">{{ .Title }}</h3>
-            <div class="clip-meta">
-                <div class="meta-item">
-                    <span class="meta-label">Client:</span>
-                    <span class="meta-value">{{ .ClientID }}</span>
+    <div class="clip-card">
+        <div class="clip-content" onclick="window.location.href='/clips/{{ .ID }}'" style="cursor: pointer;">
+            <div class="clip-thumbnail">
+                <div class="clip-selection">
+                    <label class="clip-checkbox-container">
+                        <input type="checkbox" class="clip-checkbox" value="{{ .ID }}" onchange="updateDeleteButton()">
+                        <span class="clip-checkmark"></span>
+                    </label>
                 </div>
-                <div class="meta-item">
-                    <span class="meta-label">Date:</span>
-                    <span class="meta-value">{{ (.TimeStamp | toLocal).Format "2006-01-02" }}</span>
+                <img src="/clips/{{ .ID }}/thumbnail" alt="Thumbnail for clip {{ .ID }}" loading="lazy" 
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="no-thumbnail" style="display: none;">
+                    <span>No Thumbnail</span>
                 </div>
-                <div class="meta-item">
-                    <span class="meta-label">Time:</span>
-                    <span class="meta-value">{{ (.TimeStamp | toLocal).Format "15:04:05" }}</span>
+                <div class="clip-duration">{{ .Duration | formatDuration }}</div>
+                <div class="motion-indicator {{ if .HasMotion }}motion{{ else }}no-motion{{ end }}">
+                    {{ if .HasMotion }}Motion{{ else }}No Motion{{ end }}
+                </div>
+            </div>
+            
+            <div class="clip-info">
+                <h3 class="clip-title">{{ .Title }}</h3>
+                <div class="clip-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Client:</span>
+                        <span class="meta-value">{{ .ClientID }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Date:</span>
+                        <span class="meta-value">{{ (.TimeStamp | toLocal).Format "2006-01-02" }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Time:</span>
+                        <span class="meta-value">{{ (.TimeStamp | toLocal).Format "15:04:05" }}</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -105,4 +129,122 @@
 {{ else }}
 <p>No clips found.</p>
 {{ end }}
+
+<script>
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.clip-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateDeleteButton();
+}
+
+function updateDeleteButton() {
+    const checkboxes = document.querySelectorAll('.clip-checkbox:checked');
+    const deleteButton = document.getElementById('deleteSelected');
+    const selectAll = document.getElementById('selectAll');
+    const allCheckboxes = document.querySelectorAll('.clip-checkbox');
+    
+    if (checkboxes.length > 0) {
+        deleteButton.style.display = 'inline-block';
+        deleteButton.textContent = `Delete Selected (${checkboxes.length})`;
+    } else {
+        deleteButton.style.display = 'none';
+    }
+    
+    // Update select all checkbox state
+    if (checkboxes.length === allCheckboxes.length) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+    } else if (checkboxes.length > 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
+    } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    }
+}
+
+function deleteSelectedClips() {
+    const checkboxes = document.querySelectorAll('.clip-checkbox:checked');
+    const clipIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (clipIds.length === 0) {
+        alert('No clips selected for deletion.');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ${clipIds.length} selected clip(s)? This action cannot be undone.`)) {
+        return;
+    }
+    
+    // Disable the delete button to prevent multiple clicks
+    const deleteButton = document.getElementById('deleteSelected');
+    deleteButton.disabled = true;
+    deleteButton.textContent = 'Deleting...';
+    
+    fetch('/clips/delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            clip_ids: clipIds
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.deleted_clips && data.deleted_clips.length > 0) {
+            // If some clips failed to delete, show a message about partial success
+            if (data.failed_clips && data.failed_clips.length > 0) {
+                alert(`Successfully deleted ${data.deleted_clips.length} clip(s). Failed to delete ${data.failed_clips.length} clip(s).`);
+            }
+            
+            // Reload the page to refresh the clip list (no alert for complete success)
+            window.location.reload();
+        } else if (data.failed_clips && data.failed_clips.length > 0) {
+            alert(`Failed to delete ${data.failed_clips.length} clip(s). Please try again.`);
+            deleteButton.disabled = false;
+            deleteButton.textContent = `Delete Selected (${clipIds.length})`;
+        } else {
+            alert('No clips were deleted. Please try again.');
+            deleteButton.disabled = false;
+            deleteButton.textContent = `Delete Selected (${clipIds.length})`;
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting clips:', error);
+        alert('An error occurred while deleting clips. Please try again.');
+        deleteButton.disabled = false;
+        deleteButton.textContent = `Delete Selected (${clipIds.length})`;
+    });
+}
+
+// Prevent clip selection from triggering navigation
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.clip-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
+    
+    const checkboxContainers = document.querySelectorAll('.clip-selection');
+    checkboxContainers.forEach(container => {
+        container.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
+    
+    const clipCheckboxContainers = document.querySelectorAll('.clip-checkbox-container');
+    clipCheckboxContainers.forEach(container => {
+        container.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
+});
+</script>
 {{ end }}

@@ -76,6 +76,7 @@ func main() {
 	mekService := encryption.NewMekService(logger, mekRepo, encryptor)
 	clientService := clients.NewClientService(logger, clientRepo, encryptor)
 	clipReader := videos.NewClipReader(logger, clipRepo, encryptor)
+	clipDeleter := videos.NewClipDeleter(logger, clipRepo)
 	storageManager := videos.NewStorageManager(logger, clipRepo, clientRepo, nil, nil)
 
 	// Set up session store
@@ -99,7 +100,7 @@ func main() {
 	// Set up handlers
 	authHandler := handlers.NewAuthHandler(logger, mekService, mekStoreFactory)
 	clientHandler := handlers.NewClientHandler(logger, clientService, storageManager, mekStoreFactory)
-	clipHandler := handlers.NewClipHandler(logger, clipReader, clientService, mekStoreFactory)
+	clipHandler := handlers.NewClipHandler(logger, clipReader, clipDeleter, clientService, mekStoreFactory)
 
 	// Set up middleware
 	authMiddleware := middleware.NewAuthMiddleware(logger, mekService, mekStoreFactory)
@@ -137,6 +138,7 @@ func main() {
 			clipGroup.GET("/:id", clipHandler.ViewClip)
 			clipGroup.GET("/:id/thumbnail", clipHandler.GetThumbnail)
 			clipGroup.GET("/:id/video", clipHandler.GetVideo)
+			clipGroup.POST("/delete", clipHandler.DeleteClips)
 		}
 	}
 

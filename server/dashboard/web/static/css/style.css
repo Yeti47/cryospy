@@ -90,7 +90,8 @@ h2 {
     cursor: pointer;
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
     display: inline-block;
-    margin-bottom: 1rem;
+    margin: 0; /* Remove default margin for better alignment */
+    line-height: 1;
 }
 
 .btn:hover {
@@ -977,5 +978,243 @@ table td a:hover {
     .motion-badge, .duration-badge, .client-badge, .format-badge {
         font-size: 0.8rem;
         padding: 0.4rem 0.8rem;
+    }
+}
+
+/* Clip Selection and Bulk Actions */
+.clips-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem; /* Reduced padding for compactness */
+    background: var(--secondary-color);
+    border-radius: 5px;
+    border: 1px solid var(--accent-color);
+}
+
+.bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 2rem; /* Increased gap to prevent accidental clicks */
+    height: auto; /* Let content determine height */
+    min-height: 36px; /* Minimum height to match button */
+}
+
+.select-all-container {
+    display: flex;
+    align-items: center;
+}
+
+.delete-actions {
+    display: flex;
+    align-items: center;
+}
+
+/* Select All Checkbox Styling */
+.select-all-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    gap: 0.75rem; /* Proper spacing between checkbox and label */
+    color: var(--text-color);
+    font-size: 0.9rem;
+    line-height: 1;
+    margin: 0; /* Remove any default margins */
+    padding: 0; /* Remove any default padding */
+}
+
+.select-all-checkbox input[type="checkbox"] {
+    display: none;
+}
+
+.select-all-checkmark {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    background-color: var(--primary-color);
+    border: 2px solid var(--accent-color);
+    border-radius: 3px;
+    transition: all 0.3s ease;
+}
+
+.select-all-checkbox:hover .select-all-checkmark {
+    border-color: var(--highlight-color);
+    box-shadow: 0 0 5px rgba(0, 242, 255, 0.3);
+}
+
+.select-all-checkbox input[type="checkbox"]:checked + .select-all-checkmark {
+    background-color: var(--highlight-color);
+    border-color: var(--highlight-color);
+    box-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+}
+
+.select-all-checkbox input[type="checkbox"]:indeterminate + .select-all-checkmark {
+    background-color: var(--accent-color);
+    border-color: var(--highlight-color);
+}
+
+.select-all-checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+}
+
+.select-all-checkbox input[type="checkbox"]:checked + .select-all-checkmark:after {
+    display: block;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid var(--primary-color);
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+
+.select-all-checkbox input[type="checkbox"]:indeterminate + .select-all-checkmark:after {
+    display: block;
+    left: 6px;
+    top: 7px;
+    width: 6px;
+    height: 2px;
+    background: var(--primary-color);
+    border: none;
+    transform: none;
+}
+
+.select-all-label {
+    margin: 0;
+    padding: 0;
+}
+
+/* Clip Card Selection */
+.clip-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.clip-selection {
+    position: absolute;
+    top: 8px;
+    right: 8px; /* Moved to top-right */
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.7); /* Better contrast */
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.clip-checkbox-container {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.clip-checkbox-container input[type="checkbox"] {
+    display: none;
+}
+
+.clip-checkmark {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.clip-checkbox-container:hover .clip-checkmark {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.clip-checkbox-container input[type="checkbox"]:checked + .clip-checkmark {
+    background-color: var(--highlight-color);
+    border-color: var(--highlight-color);
+    box-shadow: 0 0 8px rgba(0, 242, 255, 0.6);
+}
+
+.clip-checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 4px;
+    top: 1px;
+    width: 3px;
+    height: 7px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.clip-checkbox-container input[type="checkbox"]:checked + .clip-checkmark:after {
+    display: block;
+}
+
+.clip-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.clip-thumbnail {
+    position: relative;
+}
+
+/* Bulk Delete Button Enhancement */
+.btn-danger {
+    background: linear-gradient(135deg, var(--error-color), #cc0000);
+    animation: pulse-danger 2s infinite;
+}
+
+@keyframes pulse-danger {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 77, 77, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 77, 77, 0);
+    }
+}
+
+.btn-danger:disabled {
+    background: var(--accent-color);
+    cursor: not-allowed;
+    animation: none;
+}
+
+/* Mobile Responsiveness for Selection */
+@media (max-width: 768px) {
+    .clips-actions {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+    
+    .bulk-actions {
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    
+    .clip-selection {
+        top: 5px;
+        right: 5px; /* Keep it on the right for mobile too */
+        padding: 3px;
+    }
+    
+    .select-all-checkbox {
+        font-size: 0.8rem;
+        gap: 0.5rem;
+    }
+    
+    .select-all-checkmark,
+    .clip-checkmark {
+        width: 16px;
+        height: 16px;
     }
 }

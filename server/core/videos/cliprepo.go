@@ -226,9 +226,18 @@ func (r *SQLiteClipRepository) Add(ctx context.Context, clip *Clip) error {
 func (r *SQLiteClipRepository) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM clips WHERE id = ?`
 
-	_, err := r.db.ExecContext(ctx, query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete clip: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("clip with ID %s not found", id)
 	}
 
 	return nil
