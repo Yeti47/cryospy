@@ -115,7 +115,7 @@ func (s *uploadQueue) uploadClip(job *UploadJob, successCallback func(job *Uploa
 	// Create upload request
 	uploadRequest := client.UploadClipRequest{
 		VideoData:          videoData,
-		MimeType:           common.VideoFormatToMimeType(job.ProcessedClip.Format),
+		MimeType:           common.VideoFormatToMimeType(job.Format),
 		Duration:           job.Duration,
 		HasMotion:          job.HasMotion,
 		RecordingTimestamp: job.RecordingTimestamp,

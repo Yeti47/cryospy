@@ -2,8 +2,6 @@ package uploading
 
 import (
 	"time"
-
-	postprocessing "github.com/yeti47/cryospy/client/capture-client/post-processing"
 )
 
 // UploadJob represents a video clip ready for upload
@@ -12,5 +10,5 @@ type UploadJob struct {
 	HasMotion          bool
 	Duration           time.Duration
 	RecordingTimestamp time.Time
-	ProcessedClip      *postprocessing.VideoClip
+	Format             string // Video format (e.g., "mp4", "avi") for MIME type determination
 }

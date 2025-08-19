@@ -230,7 +230,7 @@ func (c *CaptureClient) processRawClip(rawClip *recording.RawClip) {
 		HasMotion:          hasMotion,
 		Duration:           processedClip.Duration,
 		RecordingTimestamp: rawClip.Timestamp,
-		ProcessedClip:      processedClip,
+		Format:             processedClip.Format,
 	}
 
 	// Queue for upload
