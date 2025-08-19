@@ -177,6 +177,10 @@ func (r *GoCVRecorder) recordNextClip(webcam *gocv.VideoCapture, clipIndex int, 
 	startTime := time.Now()
 	frameCount := 0
 
+	// Calculate frame interval for precise timing control
+	frameInterval := time.Duration(float64(time.Second) / settingsSnapshot.FrameRate)
+	nextFrameTime := startTime
+
 	for time.Since(startTime) < settingsSnapshot.ClipDuration {
 		r.mu.RLock()
 		isRec := r.isRecording
@@ -186,14 +190,22 @@ func (r *GoCVRecorder) recordNextClip(webcam *gocv.VideoCapture, clipIndex int, 
 			break
 		}
 
+		// Wait until it's time for the next frame to maintain proper frame rate
+		now := time.Now()
+		if now.Before(nextFrameTime) {
+			time.Sleep(nextFrameTime.Sub(now))
+		}
+
 		if ok := webcam.Read(&img); !ok {
 			log.Printf("Failed to read frame %d from webcam", frameCount)
 			time.Sleep(time.Millisecond * 67) // Wait a bit before retrying
+			// Don't advance nextFrameTime on failed reads
 			continue
 		}
 
 		if img.Empty() {
 			log.Printf("Empty frame %d from webcam", frameCount)
+			// Don't advance nextFrameTime on empty frames
 			continue
 		}
 
@@ -202,6 +214,9 @@ func (r *GoCVRecorder) recordNextClip(webcam *gocv.VideoCapture, clipIndex int, 
 			log.Printf("Failed to write frame %d to video: %v", frameCount, err)
 		}
 		frameCount++
+
+		// Calculate the time for the next frame
+		nextFrameTime = nextFrameTime.Add(frameInterval)
 	}
 
 	clipDuration := time.Since(startTime)

@@ -91,10 +91,14 @@ func main() {
 	postProcessingSettingsProvider := postprocessing.NewPostProcessingSettingsProvider(clientSettingsProvider)
 	recordingSettingsProvider := recording.NewRecordingSettingsProvider(clientSettingsProvider)
 
+	// Create codec provider for video post-processing
+	codecProvider := common.NewFFmpegCodecProvider()
+
 	// Create core components
 	recorder := recording.NewGoCVRecorder(cfg.CameraDevice, tempDir, recordingSettingsProvider)
 	motionDetector := motiondetection.NewGoCVMotionDetector(motionSettingsProvider)
-	postProcessor := postprocessing.NewFfmpegPostProcessor(postProcessingSettingsProvider)
+	// Create post-processor with codec provider
+	postProcessor := postprocessing.NewFfmpegPostProcessor(postProcessingSettingsProvider, codecProvider)
 	fileTracker := filemanagement.NewLocalFileTracker(tempDir)
 	uploadQueue := uploading.NewUploadQueue(serverClient, cfg.BufferSize, time.Duration(cfg.ServerTimeoutSeconds)*time.Second+5*time.Second)
 

@@ -48,7 +48,7 @@ type UpdateClientSettingsRequest struct {
 
 var supportedDownscaleResolutions = []string{"", "360p", "480p", "640x480", "720p", "800x600", "1024x768", "1080p"}
 var supportedCaptureCodecs = []string{"MJPG", "YUYV", "H264"}
-var supportedOutputCodecs = []string{"libx264", "libx265", "libvpx-vp9", "ffv1"}
+var supportedOutputCodecs = []string{"libx264", "libopenh264", "libx265", "libvpx-vp9", "ffv1"}
 var supportedOutputFormats = []string{"mp4", "avi", "mkv", "webm", "mov"}
 var supportedVideoBitrates = []string{"500k", "1000k", "1500k", "4000k", "8000k", "15000k"}
 

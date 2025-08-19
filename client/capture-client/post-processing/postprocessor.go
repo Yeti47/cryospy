@@ -2,12 +2,14 @@ package postprocessing
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/xfrr/goffmpeg/transcoder"
+	"github.com/yeti47/cryospy/client/capture-client/common"
 	"github.com/yeti47/cryospy/client/capture-client/config"
 	"github.com/yeti47/cryospy/client/capture-client/recording"
 )
@@ -19,11 +21,13 @@ type PostProcessor interface {
 
 type FfmpegPostProcessor struct {
 	settingsProvider config.SettingsProvider[PostProcessingSettings]
+	codecProvider    common.CodecProvider
 }
 
-func NewFfmpegPostProcessor(settingsProvider config.SettingsProvider[PostProcessingSettings]) *FfmpegPostProcessor {
+func NewFfmpegPostProcessor(settingsProvider config.SettingsProvider[PostProcessingSettings], codecProvider common.CodecProvider) *FfmpegPostProcessor {
 	return &FfmpegPostProcessor{
 		settingsProvider: settingsProvider,
+		codecProvider:    codecProvider,
 	}
 }
 
@@ -33,19 +37,29 @@ func (p *FfmpegPostProcessor) ProcessVideo(rawClip *recording.RawClip) (*VideoCl
 	// The provider is responsible for its own thread safety.
 	settings := p.settingsProvider.GetSettings()
 
+	// Log post-processing settings for debugging
+	log.Printf("Post-processing settings - Format: '%s', Codec: '%s', BitRate: '%s', Grayscale: %v, Resolution: '%s'",
+		settings.OutputFormat, settings.OutputCodec, settings.VideoBitRate, settings.Grayscale, settings.DownscaleResolution.Format("w:h"))
+
+	// Validate and apply codec fallback if necessary
+	codec, err := p.codecProvider.GetFallbackCodec(settings.OutputCodec)
+	if err != nil {
+		return nil, fmt.Errorf("codec validation failed: %w", err)
+	}
+
 	// Create transcoder instance
 	trans := new(transcoder.Transcoder)
 
 	outputPath := p.getOutputPath(rawClip, settings)
 
 	// Initialize transcoder with input and output files
-	err := trans.Initialize(rawClip.Path, outputPath)
+	err = trans.Initialize(rawClip.Path, outputPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transcoder: %w", err)
 	}
 
 	// Configure basic output settings - video only, no audio
-	trans.MediaFile().SetVideoCodec(settings.OutputCodec)
+	trans.MediaFile().SetVideoCodec(codec)
 	trans.MediaFile().SetOutputFormat(settings.OutputFormat)
 
 	// Disable audio streams

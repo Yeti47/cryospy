@@ -183,6 +183,23 @@ func createTemplateRenderer() multitemplate.Renderer {
 		"toLocal": func(t time.Time) time.Time {
 			return t.Local()
 		},
+		"formatDuration": func(d time.Duration) string {
+			// Round to the nearest second to remove milliseconds
+			seconds := int(d.Round(time.Second).Seconds())
+
+			if seconds < 60 {
+				return fmt.Sprintf("%ds", seconds)
+			}
+
+			minutes := seconds / 60
+			remainingSeconds := seconds % 60
+
+			if remainingSeconds == 0 {
+				return fmt.Sprintf("%dm", minutes)
+			}
+
+			return fmt.Sprintf("%dm %ds", minutes, remainingSeconds)
+		},
 	}
 
 	r.AddFromFilesFuncs("layout", funcMap, "web/templates/layout.html")
