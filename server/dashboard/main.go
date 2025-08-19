@@ -76,6 +76,7 @@ func main() {
 	mekService := encryption.NewMekService(logger, mekRepo, encryptor)
 	clientService := clients.NewClientService(logger, clientRepo, encryptor)
 	clipReader := videos.NewClipReader(logger, clipRepo, encryptor)
+	storageManager := videos.NewStorageManager(logger, clipRepo, clientRepo, nil, nil)
 
 	// Set up session store
 	sessionKey, err := dashboard_sessions.GetOrCreateSessionKey()
@@ -97,7 +98,7 @@ func main() {
 
 	// Set up handlers
 	authHandler := handlers.NewAuthHandler(logger, mekService, mekStoreFactory)
-	clientHandler := handlers.NewClientHandler(logger, clientService, mekStoreFactory)
+	clientHandler := handlers.NewClientHandler(logger, clientService, storageManager, mekStoreFactory)
 	clipHandler := handlers.NewClipHandler(logger, clipReader, clientService, mekStoreFactory)
 
 	// Set up middleware
@@ -180,6 +181,21 @@ func createTemplateRenderer() multitemplate.Renderer {
 			mb := float64(bytes) / 1048576.0
 			return fmt.Sprintf("%.2f MB", mb)
 		},
+		"formatBytes": func(bytes int64) string {
+			if bytes == 0 {
+				return "0 B"
+			}
+			const unit = 1024
+			if bytes < unit {
+				return fmt.Sprintf("%d B", bytes)
+			}
+			div, exp := int64(unit), 0
+			for n := bytes / unit; n >= unit; n /= unit {
+				div *= unit
+				exp++
+			}
+			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+		},
 		"toLocal": func(t time.Time) time.Time {
 			return t.Local()
 		},
@@ -199,6 +215,25 @@ func createTemplateRenderer() multitemplate.Renderer {
 			}
 
 			return fmt.Sprintf("%dm %ds", minutes, remainingSeconds)
+		},
+		"formatStoragePercent": func(percent float64) string {
+			return fmt.Sprintf("%.1f%%", percent)
+		},
+		"getStorageColorClass": func(percent float64, unlimited bool) string {
+			if unlimited {
+				return "storage-unlimited"
+			}
+			if percent >= 90 {
+				return "storage-critical"
+			} else if percent >= 75 {
+				return "storage-warning"
+			} else if percent >= 50 {
+				return "storage-caution"
+			}
+			return "storage-ok"
+		},
+		"sub": func(a, b int64) int64 {
+			return a - b
 		},
 	}
 

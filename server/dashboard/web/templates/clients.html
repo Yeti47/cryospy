@@ -8,6 +8,39 @@
     {{ range .Clients }}
     <div class="client-card">
         <h3>{{ .ID }}</h3>
+        {{ if .StorageInfo }}
+        <div class="storage-info">
+            <div class="storage-header">
+                <span class="storage-label">Storage Usage</span>
+                {{ if eq .StorageInfo.TotalAvailableBytes 0 }}
+                <span class="storage-status unlimited">Unlimited</span>
+                {{ else }}
+                <span class="storage-status {{ getStorageColorClass .StorageInfo.UsagePercent false }}">
+                    {{ formatStoragePercent .StorageInfo.UsagePercent }}
+                </span>
+                {{ end }}
+            </div>
+            <div class="storage-bar-container">
+                {{ if eq .StorageInfo.TotalAvailableBytes 0 }}
+                <div class="storage-bar unlimited">
+                    <div class="storage-fill unlimited"></div>
+                </div>
+                <div class="storage-details">
+                    <span>{{ formatBytes .StorageInfo.TotalUsedBytes }} used</span>
+                </div>
+                {{ else }}
+                <div class="storage-bar">
+                    <div class="storage-fill {{ getStorageColorClass .StorageInfo.UsagePercent false }}" 
+                         style="width: {{ .StorageInfo.UsagePercent }}%"></div>
+                </div>
+                <div class="storage-details">
+                    <span>{{ formatBytes .StorageInfo.TotalUsedBytes }} / {{ formatBytes .StorageInfo.TotalAvailableBytes }}</span>
+                    <span class="storage-remaining">{{ formatBytes (sub .StorageInfo.TotalAvailableBytes .StorageInfo.TotalUsedBytes) }} remaining</span>
+                </div>
+                {{ end }}
+            </div>
+        </div>
+        {{ end }}
         <form action="/clients/{{ .ID }}/settings" method="post" id="settings-form-{{ .ID }}">
             <div class="settings-columns">
                 <div class="settings-column">

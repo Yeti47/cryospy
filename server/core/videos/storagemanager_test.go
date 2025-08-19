@@ -966,6 +966,194 @@ func TestStorageManager_ConcurrentStorageLimitRaceCondition(t *testing.T) {
 	// This is correct behavior - the clip was successfully stored, but later cleaned up.
 }
 
+func TestStorageManager_GetStorageInfo_UnlimitedStorage(t *testing.T) {
+	sm, clipRepo, clientRepo, _, _, cleanup := setupStorageManagerTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create client with unlimited storage (0 limit)
+	client := createTestClientForStorage("client-unlimited", 0)
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Add some clips
+	for i := 0; i < 3; i++ {
+		clip := createTestClipForStorage(fmt.Sprintf("clip-%d", i), "client-unlimited", 1*1024*1024) // 1MB each
+		clip.TimeStamp = time.Now().UTC().Add(-time.Duration(i) * time.Hour)
+		err = clipRepo.Add(ctx, clip)
+		if err != nil {
+			t.Fatalf("Failed to add clip %d: %v", i, err)
+		}
+	}
+
+	// Get storage info
+	storageInfo, err := sm.GetStorageInfo(ctx, "client-unlimited")
+	if err != nil {
+		t.Fatalf("Failed to get storage info: %v", err)
+	}
+
+	// Verify unlimited storage properties
+	if storageInfo.TotalAvailableBytes != 0 {
+		t.Errorf("Expected TotalAvailableBytes to be 0 for unlimited storage, got %d", storageInfo.TotalAvailableBytes)
+	}
+
+	expectedUsedBytes := int64(3 * 1024 * 1024) // 3MB
+	if storageInfo.TotalUsedBytes != expectedUsedBytes {
+		t.Errorf("Expected TotalUsedBytes to be %d, got %d", expectedUsedBytes, storageInfo.TotalUsedBytes)
+	}
+
+	if storageInfo.UsagePercent != 0.0 {
+		t.Errorf("Expected UsagePercent to be 0.0 for unlimited storage, got %f", storageInfo.UsagePercent)
+	}
+}
+
+func TestStorageManager_GetStorageInfo_LimitedStorage(t *testing.T) {
+	sm, clipRepo, clientRepo, _, _, cleanup := setupStorageManagerTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create client with 10MB storage limit
+	client := createTestClientForStorage("client-limited", 10)
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Add clips totaling 3MB
+	for i := 0; i < 3; i++ {
+		clip := createTestClipForStorage(fmt.Sprintf("clip-%d", i), "client-limited", 1*1024*1024) // 1MB each
+		clip.TimeStamp = time.Now().UTC().Add(-time.Duration(i) * time.Hour)
+		err = clipRepo.Add(ctx, clip)
+		if err != nil {
+			t.Fatalf("Failed to add clip %d: %v", i, err)
+		}
+	}
+
+	// Get storage info
+	storageInfo, err := sm.GetStorageInfo(ctx, "client-limited")
+	if err != nil {
+		t.Fatalf("Failed to get storage info: %v", err)
+	}
+
+	// Verify limited storage properties
+	expectedAvailableBytes := int64(10 * 1024 * 1024) // 10MB
+	if storageInfo.TotalAvailableBytes != expectedAvailableBytes {
+		t.Errorf("Expected TotalAvailableBytes to be %d, got %d", expectedAvailableBytes, storageInfo.TotalAvailableBytes)
+	}
+
+	expectedUsedBytes := int64(3 * 1024 * 1024) // 3MB
+	if storageInfo.TotalUsedBytes != expectedUsedBytes {
+		t.Errorf("Expected TotalUsedBytes to be %d, got %d", expectedUsedBytes, storageInfo.TotalUsedBytes)
+	}
+
+	expectedUsagePercent := 30.0 // 3MB out of 10MB = 30%
+	if storageInfo.UsagePercent != expectedUsagePercent {
+		t.Errorf("Expected UsagePercent to be %f, got %f", expectedUsagePercent, storageInfo.UsagePercent)
+	}
+}
+
+func TestStorageManager_GetStorageInfo_EmptyStorage(t *testing.T) {
+	sm, _, clientRepo, _, _, cleanup := setupStorageManagerTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create client with 5MB storage limit but no clips
+	client := createTestClientForStorage("client-empty", 5)
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Get storage info
+	storageInfo, err := sm.GetStorageInfo(ctx, "client-empty")
+	if err != nil {
+		t.Fatalf("Failed to get storage info: %v", err)
+	}
+
+	// Verify empty storage properties
+	expectedAvailableBytes := int64(5 * 1024 * 1024) // 5MB
+	if storageInfo.TotalAvailableBytes != expectedAvailableBytes {
+		t.Errorf("Expected TotalAvailableBytes to be %d, got %d", expectedAvailableBytes, storageInfo.TotalAvailableBytes)
+	}
+
+	if storageInfo.TotalUsedBytes != 0 {
+		t.Errorf("Expected TotalUsedBytes to be 0, got %d", storageInfo.TotalUsedBytes)
+	}
+
+	if storageInfo.UsagePercent != 0.0 {
+		t.Errorf("Expected UsagePercent to be 0.0, got %f", storageInfo.UsagePercent)
+	}
+}
+
+func TestStorageManager_GetStorageInfo_FullStorage(t *testing.T) {
+	sm, clipRepo, clientRepo, _, _, cleanup := setupStorageManagerTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create client with 2MB storage limit
+	client := createTestClientForStorage("client-full", 2)
+	err := clientRepo.Create(ctx, client)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Add clips totaling 2MB (exactly at limit)
+	for i := 0; i < 2; i++ {
+		clip := createTestClipForStorage(fmt.Sprintf("clip-%d", i), "client-full", 1*1024*1024) // 1MB each
+		clip.TimeStamp = time.Now().UTC().Add(-time.Duration(i) * time.Hour)
+		err = clipRepo.Add(ctx, clip)
+		if err != nil {
+			t.Fatalf("Failed to add clip %d: %v", i, err)
+		}
+	}
+
+	// Get storage info
+	storageInfo, err := sm.GetStorageInfo(ctx, "client-full")
+	if err != nil {
+		t.Fatalf("Failed to get storage info: %v", err)
+	}
+
+	// Verify full storage properties
+	expectedAvailableBytes := int64(2 * 1024 * 1024) // 2MB
+	if storageInfo.TotalAvailableBytes != expectedAvailableBytes {
+		t.Errorf("Expected TotalAvailableBytes to be %d, got %d", expectedAvailableBytes, storageInfo.TotalAvailableBytes)
+	}
+
+	expectedUsedBytes := int64(2 * 1024 * 1024) // 2MB
+	if storageInfo.TotalUsedBytes != expectedUsedBytes {
+		t.Errorf("Expected TotalUsedBytes to be %d, got %d", expectedUsedBytes, storageInfo.TotalUsedBytes)
+	}
+
+	expectedUsagePercent := 100.0 // 2MB out of 2MB = 100%
+	if storageInfo.UsagePercent != expectedUsagePercent {
+		t.Errorf("Expected UsagePercent to be %f, got %f", expectedUsagePercent, storageInfo.UsagePercent)
+	}
+}
+
+func TestStorageManager_GetStorageInfo_ClientNotFound(t *testing.T) {
+	sm, _, _, _, _, cleanup := setupStorageManagerTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Try to get storage info for non-existent client
+	_, err := sm.GetStorageInfo(ctx, "non-existent-client")
+	if err == nil {
+		t.Fatal("Expected error for non-existent client, got nil")
+	}
+
+	expectedError := "client not found: non-existent-client"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
 func TestStorageManager_MotionNotification(t *testing.T) {
 	sm, _, clientRepo, _, motionNotifier, cleanup := setupStorageManagerTest(t)
 	defer cleanup()

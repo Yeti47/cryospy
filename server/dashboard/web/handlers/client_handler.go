@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/hex"
 	"net/http"
 	"strconv"
@@ -8,19 +9,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/clients"
+	"github.com/yeti47/cryospy/server/core/videos"
 	"github.com/yeti47/cryospy/server/dashboard/sessions"
 )
 
 type ClientHandler struct {
 	logger          logging.Logger
 	clientService   clients.ClientService
+	storageManager  videos.StorageManager
 	mekStoreFactory sessions.MekStoreFactory
 }
 
-func NewClientHandler(logger logging.Logger, clientService clients.ClientService, mekStoreFactory sessions.MekStoreFactory) *ClientHandler {
+func NewClientHandler(logger logging.Logger, clientService clients.ClientService, storageManager videos.StorageManager, mekStoreFactory sessions.MekStoreFactory) *ClientHandler {
 	return &ClientHandler{
 		logger:          logger,
 		clientService:   clientService,
+		storageManager:  storageManager,
 		mekStoreFactory: mekStoreFactory,
 	}
 }
@@ -36,9 +40,29 @@ func (h *ClientHandler) ListClients(c *gin.Context) {
 		return
 	}
 
+	// Create a structure to hold client and storage info
+	type ClientWithStorage struct {
+		*clients.Client
+		StorageInfo *videos.StorageInfo
+	}
+
+	clientsWithStorage := make([]ClientWithStorage, len(clientList))
+	for i, client := range clientList {
+		storageInfo, err := h.storageManager.GetStorageInfo(context.Background(), client.ID)
+		if err != nil {
+			h.logger.Warn("Failed to get storage info for client", "client_id", client.ID, "error", err)
+			// Continue with nil storage info - we'll handle this in the template
+			storageInfo = nil
+		}
+		clientsWithStorage[i] = ClientWithStorage{
+			Client:      client,
+			StorageInfo: storageInfo,
+		}
+	}
+
 	c.HTML(http.StatusOK, "clients", gin.H{
 		"Title":                  "Clients",
-		"Clients":                clientList,
+		"Clients":                clientsWithStorage,
 		"SupportedResolutions":   h.clientService.GetSupportedDownscaleResolutions(),
 		"SupportedCaptureCodecs": h.clientService.GetSupportedCaptureCodecs(),
 		"SupportedOutputCodecs":  h.clientService.GetSupportedOutputCodecs(),

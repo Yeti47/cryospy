@@ -12,8 +12,15 @@ import (
 
 const bytesInMegabyte = 1024 * 1024
 
+type StorageInfo struct {
+	TotalAvailableBytes int64   // Total storage available in bytes (0 means unlimited)
+	TotalUsedBytes      int64   // Total storage used in bytes
+	UsagePercent        float64 // Percentage of storage used (0-100)
+}
+
 type StorageManager interface {
 	StoreClip(ctx context.Context, clip *Clip) error
+	GetStorageInfo(ctx context.Context, clientID string) (*StorageInfo, error)
 }
 
 type storageManager struct {
@@ -164,4 +171,43 @@ func (s *storageManager) StoreClip(ctx context.Context, clip *Clip) error {
 	}
 
 	return nil
+}
+
+func (s *storageManager) GetStorageInfo(ctx context.Context, clientID string) (*StorageInfo, error) {
+	client, err := s.clientRepo.GetByID(ctx, clientID)
+	if err != nil {
+		s.logger.Error("failed to get client for storage info", "error", err, "client_id", clientID)
+		return nil, err
+	}
+
+	if client == nil {
+		s.logger.Error("client not found", "client_id", clientID)
+		return nil, fmt.Errorf("client not found: %s", clientID)
+	}
+
+	usageBytes, err := s.clipRepo.GetTotalStorageUsage(ctx, clientID)
+	if err != nil {
+		s.logger.Error("failed to get total storage usage", "error", err, "client_id", clientID)
+		return nil, err
+	}
+
+	var totalAvailableBytes int64
+	var usagePercent float64
+
+	if client.StorageLimitMegabytes <= 0 {
+		// Unlimited storage
+		totalAvailableBytes = 0
+		usagePercent = 0.0
+	} else {
+		totalAvailableBytes = int64(client.StorageLimitMegabytes) * bytesInMegabyte
+		if totalAvailableBytes > 0 {
+			usagePercent = (float64(usageBytes) / float64(totalAvailableBytes)) * 100.0
+		}
+	}
+
+	return &StorageInfo{
+		TotalAvailableBytes: totalAvailableBytes,
+		TotalUsedBytes:      usageBytes,
+		UsagePercent:        usagePercent,
+	}, nil
 }
