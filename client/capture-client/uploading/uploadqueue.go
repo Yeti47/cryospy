@@ -28,14 +28,16 @@ type uploadQueue struct {
 	serverClient client.CaptureServerClient
 	uploadQueue  chan *UploadJob
 	bufferSize   int
+	drainTimeout time.Duration
 }
 
 // NewUploadQueue creates a new server upload service
-func NewUploadQueue(serverClient client.CaptureServerClient, bufferSize int) UploadQueue {
+func NewUploadQueue(serverClient client.CaptureServerClient, bufferSize int, drainTimeout time.Duration) UploadQueue {
 	return &uploadQueue{
 		serverClient: serverClient,
 		uploadQueue:  make(chan *UploadJob, bufferSize),
 		bufferSize:   bufferSize,
+		drainTimeout: drainTimeout,
 	}
 }
 
@@ -62,7 +64,7 @@ func (s *uploadQueue) Start(stopChan <-chan struct{}, wg *sync.WaitGroup, succes
 			s.uploadClip(uploadJob, successCallback)
 		case <-stopChan:
 			// Process remaining uploads with timeout
-			s.drainQueueWithCallback(30*time.Second, successCallback)
+			s.drainQueueWithCallback(s.drainTimeout, successCallback)
 			return
 		}
 	}

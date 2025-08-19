@@ -96,7 +96,7 @@ func main() {
 	motionDetector := motiondetection.NewGoCVMotionDetector(motionSettingsProvider)
 	postProcessor := postprocessing.NewFfmpegPostProcessor(postProcessingSettingsProvider)
 	fileTracker := filemanagement.NewLocalFileTracker(tempDir)
-	uploadQueue := uploading.NewUploadQueue(serverClient, cfg.BufferSize)
+	uploadQueue := uploading.NewUploadQueue(serverClient, cfg.BufferSize, time.Duration(cfg.ServerTimeoutSeconds)*time.Second+5*time.Second)
 
 	// Create capture client
 	captureClient := NewCaptureClient(
