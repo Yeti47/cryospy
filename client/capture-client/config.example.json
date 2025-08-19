@@ -5,10 +5,5 @@
   "camera_device": "/dev/video0",
   "buffer_size": 5,
   "settings_sync_seconds": 300,
-  "video_codec": "mpeg4",
-  "video_output_format": "mp4",
-  "video_bitrate": "500k",
-  "capture_codec": "MJPG",
-  "capture_framerate": 15.0,
-  "motion_min_area": 500
+  "server_timeout_seconds": 30
 }

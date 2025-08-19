@@ -19,6 +19,14 @@ type CreateClientRequest struct {
 	MotionOnly            bool
 	Grayscale             bool
 	DownscaleResolution   string
+	OutputFormat          string
+	OutputCodec           string
+	VideoBitRate          string
+	MotionMinArea         int
+	MotionMaxFrames       int
+	MotionWarmUpFrames    int
+	CaptureCodec          string
+	CaptureFrameRate      float64
 }
 
 type UpdateClientSettingsRequest struct {
@@ -28,9 +36,21 @@ type UpdateClientSettingsRequest struct {
 	MotionOnly            bool
 	Grayscale             bool
 	DownscaleResolution   string
+	OutputFormat          string
+	OutputCodec           string
+	VideoBitRate          string
+	MotionMinArea         int
+	MotionMaxFrames       int
+	MotionWarmUpFrames    int
+	CaptureCodec          string
+	CaptureFrameRate      float64
 }
 
-var supportedDownscaleResolutions = []string{"", "360p", "480p", "720p", "1080p"}
+var supportedDownscaleResolutions = []string{"", "360p", "480p", "640x480", "720p", "800x600", "1024x768", "1080p"}
+var supportedCaptureCodecs = []string{"MJPG", "YUYV", "H264"}
+var supportedOutputCodecs = []string{"libx264", "libx265", "libvpx-vp9", "ffv1"}
+var supportedOutputFormats = []string{"mp4", "avi", "mkv", "webm", "mov"}
+var supportedVideoBitrates = []string{"500k", "1000k", "1500k", "4000k", "8000k", "15000k"}
 
 type ClientService interface {
 	// CreateClient creates a new client with the given details
@@ -45,6 +65,14 @@ type ClientService interface {
 	DeleteClient(id string) error
 	// GetSupportedDownscaleResolutions returns a list of supported downscale resolutions
 	GetSupportedDownscaleResolutions() []string
+	// GetSupportedCaptureCodecs returns a list of supported capture codecs
+	GetSupportedCaptureCodecs() []string
+	// GetSupportedOutputCodecs returns a list of supported output codecs
+	GetSupportedOutputCodecs() []string
+	// GetSupportedOutputFormats returns a list of supported output formats
+	GetSupportedOutputFormats() []string
+	// GetSupportedVideoBitrates returns a list of supported video bitrates
+	GetSupportedVideoBitrates() []string
 }
 
 type clientService struct {
@@ -66,22 +94,37 @@ func NewClientService(logger logging.Logger, repo ClientRepository, encryptor en
 	}
 }
 
-func (s *clientService) validateClientSettings(clipDuration int, downscaleResolution string) error {
-	if clipDuration < 30 || clipDuration > 1800 { // 30 minutes = 1800 seconds
+func (s *clientService) validateClientSettings(req UpdateClientSettingsRequest) error {
+	if req.ClipDurationSeconds < 30 || req.ClipDurationSeconds > 1800 { // 30 minutes = 1800 seconds
 		return NewClientValidationError("clip duration must be between 30 and 1800 seconds")
 	}
 
-	found := slices.Contains(supportedDownscaleResolutions, downscaleResolution)
-
-	if !found {
+	if !slices.Contains(supportedDownscaleResolutions, req.DownscaleResolution) {
 		return NewClientValidationError("unsupported downscale resolution")
+	}
+
+	if !slices.Contains(supportedCaptureCodecs, req.CaptureCodec) {
+		return NewClientValidationError("unsupported capture codec")
+	}
+
+	if !slices.Contains(supportedOutputCodecs, req.OutputCodec) {
+		return NewClientValidationError("unsupported output codec")
+	}
+
+	if !slices.Contains(supportedOutputFormats, req.OutputFormat) {
+		return NewClientValidationError("unsupported output format")
+	}
+
+	if !slices.Contains(supportedVideoBitrates, req.VideoBitRate) {
+		return NewClientValidationError("unsupported video bitrate")
 	}
 
 	return nil
 }
 
 func (s *clientService) CreateClient(req CreateClientRequest, mekStore encryption.MekStore) (*Client, []byte, error) {
-	if err := s.validateClientSettings(req.ClipDurationSeconds, req.DownscaleResolution); err != nil {
+	updateReq := UpdateClientSettingsRequest(req)
+	if err := s.validateClientSettings(updateReq); err != nil {
 		return nil, nil, err
 	}
 
@@ -169,6 +212,14 @@ func (s *clientService) CreateClient(req CreateClientRequest, mekStore encryptio
 		MotionOnly:            req.MotionOnly,
 		Grayscale:             req.Grayscale,
 		DownscaleResolution:   req.DownscaleResolution,
+		OutputFormat:          req.OutputFormat,
+		OutputCodec:           req.OutputCodec,
+		VideoBitRate:          req.VideoBitRate,
+		MotionMinArea:         req.MotionMinArea,
+		MotionMaxFrames:       req.MotionMaxFrames,
+		MotionWarmUpFrames:    req.MotionWarmUpFrames,
+		CaptureCodec:          req.CaptureCodec,
+		CaptureFrameRate:      req.CaptureFrameRate,
 	}
 
 	// Save the client to the repository
@@ -216,7 +267,7 @@ func (s *clientService) GetClients() ([]*Client, error) {
 }
 
 func (s *clientService) UpdateClientSettings(req UpdateClientSettingsRequest) error {
-	if err := s.validateClientSettings(req.ClipDurationSeconds, req.DownscaleResolution); err != nil {
+	if err := s.validateClientSettings(req); err != nil {
 		return err
 	}
 
@@ -232,27 +283,53 @@ func (s *clientService) UpdateClientSettings(req UpdateClientSettingsRequest) er
 	}
 	if client == nil {
 		s.logger.Info("Client not found", "id", req.ID)
-		return nil // No error if the client does not exist
+		return NewClientNotFoundError(req.ID)
 	}
 
-	// Update the settings
+	// Update the client's settings
 	client.StorageLimitMegabytes = req.StorageLimitMegabytes
 	client.ClipDurationSeconds = req.ClipDurationSeconds
 	client.MotionOnly = req.MotionOnly
 	client.Grayscale = req.Grayscale
 	client.DownscaleResolution = req.DownscaleResolution
+	client.OutputFormat = req.OutputFormat
+	client.OutputCodec = req.OutputCodec
+	client.VideoBitRate = req.VideoBitRate
+	client.MotionMinArea = req.MotionMinArea
+	client.MotionMaxFrames = req.MotionMaxFrames
+	client.MotionWarmUpFrames = req.MotionWarmUpFrames
+	client.CaptureCodec = req.CaptureCodec
+	client.CaptureFrameRate = req.CaptureFrameRate
 	client.UpdatedAt = time.Now().UTC()
 
+	// Save the updated client to the repository
 	if err := s.repo.Update(ctx, client); err != nil {
-		s.logger.Error("Failed to update client settings", err)
+		s.logger.Error("Failed to update client in repository", err)
 		return err
 	}
 
+	s.logger.Info("Successfully updated client settings", "id", client.ID)
 	return nil
 }
 
 func (s *clientService) GetSupportedDownscaleResolutions() []string {
 	return supportedDownscaleResolutions
+}
+
+func (s *clientService) GetSupportedCaptureCodecs() []string {
+	return supportedCaptureCodecs
+}
+
+func (s *clientService) GetSupportedOutputCodecs() []string {
+	return supportedOutputCodecs
+}
+
+func (s *clientService) GetSupportedOutputFormats() []string {
+	return supportedOutputFormats
+}
+
+func (s *clientService) GetSupportedVideoBitrates() []string {
+	return supportedVideoBitrates
 }
 
 func (s *clientService) DeleteClient(id string) error {

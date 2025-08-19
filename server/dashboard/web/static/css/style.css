@@ -158,6 +158,12 @@ input[type="checkbox"] {
     gap: 2rem;
 }
 
+@media (min-width: 1200px) {
+    .client-grid {
+        grid-template-columns: repeat(auto-fill, minmax(700px, 1fr));
+    }
+}
+
 .client-card {
     background-color: var(--secondary-color);
     border: 1px solid var(--accent-color);
@@ -180,6 +186,16 @@ input[type="checkbox"] {
     word-break: break-all;
 }
 
+.client-card h4 {
+    font-family: var(--header-font);
+    font-size: 1.1rem;
+    color: var(--text-color);
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--accent-color);
+    padding-bottom: 0.25rem;
+}
+
 .client-card .form-group {
     margin-bottom: 1rem;
 }
@@ -188,8 +204,25 @@ input[type="checkbox"] {
     margin-top: auto;
     padding-top: 1rem;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
+    gap: 1rem;
+}
+
+.settings-columns {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-column {
+    flex: 1;
+}
+
+@media (min-width: 768px) {
+    .settings-columns {
+        flex-direction: row;
+        gap: 2rem;
+    }
 }
 
 .form-group.checkbox-group {
@@ -213,7 +246,9 @@ input[type="checkbox"] {
     background-color: var(--secondary-color);
     padding: 2rem;
     border-radius: 8px;
-    max-width: 600px;
+    max-width: 900px;
+    margin: 0 auto; /* Center the container */
+    border: 1px solid var(--accent-color);
 }
 
 .secret-display {

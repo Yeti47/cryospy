@@ -10,14 +10,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
-
-	"github.com/yeti47/cryospy/client/capture-client/models"
 )
 
 // CaptureServerClient handles communication with the capture server
 type CaptureServerClient interface {
-	GetClientSettings(ctx context.Context) (*models.ClientSettings, error)
-	UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool, recordingTimestamp time.Time) error
+	GetClientSettings(ctx context.Context) (*ClientSettingsResponse, error)
+	UploadClip(ctx context.Context, request UploadClipRequest) error
 }
 
 // captureServerClient implements ClientService using HTTP
@@ -41,7 +39,7 @@ func NewCaptureServerClient(serverURL, clientID, clientSecret string, timeout ti
 }
 
 // GetClientSettings fetches client settings from the server
-func (s *captureServerClient) GetClientSettings(ctx context.Context) (*models.ClientSettings, error) {
+func (s *captureServerClient) GetClientSettings(ctx context.Context) (*ClientSettingsResponse, error) {
 	url := fmt.Sprintf("%s/api/client/settings", s.serverURL)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -63,7 +61,7 @@ func (s *captureServerClient) GetClientSettings(ctx context.Context) (*models.Cl
 		return nil, fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-	var settings models.ClientSettings
+	var settings ClientSettingsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -72,7 +70,7 @@ func (s *captureServerClient) GetClientSettings(ctx context.Context) (*models.Cl
 }
 
 // UploadClip uploads a video clip to the server
-func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, mimeType string, duration time.Duration, hasMotion bool, recordingTimestamp time.Time) error {
+func (s *captureServerClient) UploadClip(ctx context.Context, request UploadClipRequest) error {
 	url := fmt.Sprintf("%s/api/clips", s.serverURL)
 
 	// Create multipart form
@@ -80,19 +78,19 @@ func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, 
 	writer := multipart.NewWriter(&buf)
 
 	// Add timestamp field - use the actual recording timestamp instead of upload time
-	if err := writer.WriteField("timestamp", recordingTimestamp.UTC().Format(time.RFC3339)); err != nil {
+	if err := writer.WriteField("timestamp", request.RecordingTimestamp.UTC().Format(time.RFC3339)); err != nil {
 		return fmt.Errorf("failed to write timestamp field: %w", err)
 	}
 
 	// Add duration field using the known duration from client settings
-	durationStr := fmt.Sprintf("%.1f", duration.Seconds())
+	durationStr := fmt.Sprintf("%.1f", request.Duration.Seconds())
 	if err := writer.WriteField("duration", durationStr); err != nil {
 		return fmt.Errorf("failed to write duration field: %w", err)
 	}
 
 	// Add has_motion field using the actual motion detection result
 	motionStr := "false"
-	if hasMotion {
+	if request.HasMotion {
 		motionStr = "true"
 	}
 	if err := writer.WriteField("has_motion", motionStr); err != nil {
@@ -105,7 +103,7 @@ func (s *captureServerClient) UploadClip(ctx context.Context, videoData []byte, 
 		return fmt.Errorf("failed to create form file: %w", err)
 	}
 
-	if _, err := part.Write(videoData); err != nil {
+	if _, err := part.Write(request.VideoData); err != nil {
 		return fmt.Errorf("failed to write video data: %w", err)
 	}
 

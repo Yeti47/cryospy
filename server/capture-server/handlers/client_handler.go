@@ -28,12 +28,20 @@ func NewClientHandler(logger logging.Logger, clientService clients.ClientService
 
 // ClientSettingsResponse represents the client settings response
 type ClientSettingsResponse struct {
-	ID                    string `json:"id"`
-	StorageLimitMegabytes int    `json:"storage_limit_megabytes"`
-	ClipDurationSeconds   int    `json:"clip_duration_seconds"`
-	MotionOnly            bool   `json:"motion_only"`
-	Grayscale             bool   `json:"grayscale"`
-	DownscaleResolution   string `json:"downscale_resolution"`
+	ID                    string  `json:"id"`
+	StorageLimitMegabytes int     `json:"storage_limit_megabytes"`
+	ClipDurationSeconds   int     `json:"clip_duration_seconds"`
+	MotionOnly            bool    `json:"motion_only"`
+	Grayscale             bool    `json:"grayscale"`
+	DownscaleResolution   string  `json:"downscale_resolution"`
+	OutputFormat          string  `json:"output_format"`
+	OutputCodec           string  `json:"output_codec"`
+	VideoBitRate          string  `json:"video_bitrate"`
+	MotionMinArea         int     `json:"motion_min_area"`
+	MotionMaxFrames       int     `json:"motion_max_frames"`
+	MotionWarmUpFrames    int     `json:"motion_warm_up_frames"`
+	CaptureCodec          string  `json:"capture_codec"`
+	CaptureFrameRate      float64 `json:"capture_frame_rate"`
 }
 
 // GetClientSettings handles GET /api/client/settings
@@ -65,6 +73,14 @@ func (h *ClientHandler) GetClientSettings(c *gin.Context) {
 		MotionOnly:            client.MotionOnly,
 		Grayscale:             client.Grayscale,
 		DownscaleResolution:   client.DownscaleResolution,
+		OutputFormat:          client.OutputFormat,
+		OutputCodec:           client.OutputCodec,
+		VideoBitRate:          client.VideoBitRate,
+		MotionMinArea:         client.MotionMinArea,
+		MotionMaxFrames:       client.MotionMaxFrames,
+		MotionWarmUpFrames:    client.MotionWarmUpFrames,
+		CaptureCodec:          client.CaptureCodec,
+		CaptureFrameRate:      client.CaptureFrameRate,
 	}
 
 	c.JSON(http.StatusOK, response)

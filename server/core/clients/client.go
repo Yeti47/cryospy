@@ -15,4 +15,18 @@ type Client struct {
 	MotionOnly            bool      // A flag that describes whether the client should only upload video clips in which motion was detected
 	Grayscale             bool      // A flag that describes whether clips should be optimized to use grayscale to reduce size
 	DownscaleResolution   string    // Optional resolution to which captured video clips should be downscaled (on the client side). Example value: "360p", "480p", "720p"...
+
+	// Post-processing settings
+	OutputFormat string // Output container format (e.g., "mp4", "avi")
+	OutputCodec  string // Video codec to use for post-processing (e.g., "libx264")
+	VideoBitRate string // Bitrate for video compression (e.g., "1000k")
+
+	// Motion detection settings
+	MotionMinArea      int // Minimum area of motion to be detected
+	MotionMaxFrames    int // Maximum number of frames to check for motion
+	MotionWarmUpFrames int // Number of frames to skip before starting motion detection
+
+	// Recording settings
+	CaptureCodec     string  // Video codec to use for raw capture (e.g., "MJPG")
+	CaptureFrameRate float64 // Frame rate for video capture
 }

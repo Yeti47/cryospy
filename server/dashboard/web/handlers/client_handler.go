@@ -37,16 +37,24 @@ func (h *ClientHandler) ListClients(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "clients", gin.H{
-		"Title":                "Clients",
-		"Clients":              clientList,
-		"SupportedResolutions": h.clientService.GetSupportedDownscaleResolutions(),
+		"Title":                  "Clients",
+		"Clients":                clientList,
+		"SupportedResolutions":   h.clientService.GetSupportedDownscaleResolutions(),
+		"SupportedCaptureCodecs": h.clientService.GetSupportedCaptureCodecs(),
+		"SupportedOutputCodecs":  h.clientService.GetSupportedOutputCodecs(),
+		"SupportedOutputFormats": h.clientService.GetSupportedOutputFormats(),
+		"SupportedVideoBitrates": h.clientService.GetSupportedVideoBitrates(),
 	})
 }
 
 func (h *ClientHandler) ShowNewClientForm(c *gin.Context) {
 	c.HTML(http.StatusOK, "new-client", gin.H{
-		"Title":                "New Client",
-		"SupportedResolutions": h.clientService.GetSupportedDownscaleResolutions(),
+		"Title":                  "New Client",
+		"SupportedResolutions":   h.clientService.GetSupportedDownscaleResolutions(),
+		"SupportedCaptureCodecs": h.clientService.GetSupportedCaptureCodecs(),
+		"SupportedOutputCodecs":  h.clientService.GetSupportedOutputCodecs(),
+		"SupportedOutputFormats": h.clientService.GetSupportedOutputFormats(),
+		"SupportedVideoBitrates": h.clientService.GetSupportedVideoBitrates(),
 	})
 }
 
@@ -57,6 +65,14 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 	motionOnly := c.PostForm("motion_only") == "on"
 	grayscale := c.PostForm("grayscale") == "on"
 	downscaleResolution := c.PostForm("downscale_resolution")
+	outputFormat := c.PostForm("output_format")
+	outputCodec := c.PostForm("output_codec")
+	videoBitRate := c.PostForm("video_bitrate")
+	motionMinAreaStr := c.PostForm("motion_min_area")
+	motionMaxFramesStr := c.PostForm("motion_max_frames")
+	motionWarmUpFramesStr := c.PostForm("motion_warm_up_frames")
+	captureCodec := c.PostForm("capture_codec")
+	captureFrameRateStr := c.PostForm("capture_frame_rate")
 
 	if id == "" || storageLimitStr == "" || clipDurationStr == "" {
 		c.HTML(http.StatusBadRequest, "new-client", gin.H{
@@ -84,6 +100,42 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 		return
 	}
 
+	motionMinArea, err := strconv.Atoi(motionMinAreaStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{
+			"Title": "New Client",
+			"Error": "Invalid motion min area.",
+		})
+		return
+	}
+
+	motionMaxFrames, err := strconv.Atoi(motionMaxFramesStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{
+			"Title": "New Client",
+			"Error": "Invalid motion max frames.",
+		})
+		return
+	}
+
+	motionWarmUpFrames, err := strconv.Atoi(motionWarmUpFramesStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{
+			"Title": "New Client",
+			"Error": "Invalid motion warm up frames.",
+		})
+		return
+	}
+
+	captureFrameRate, err := strconv.ParseFloat(captureFrameRateStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{
+			"Title": "New Client",
+			"Error": "Invalid capture frame rate.",
+		})
+		return
+	}
+
 	req := clients.CreateClientRequest{
 		ID:                    id,
 		StorageLimitMegabytes: storageLimit,
@@ -91,6 +143,14 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 		MotionOnly:            motionOnly,
 		Grayscale:             grayscale,
 		DownscaleResolution:   downscaleResolution,
+		OutputFormat:          outputFormat,
+		OutputCodec:           outputCodec,
+		VideoBitRate:          videoBitRate,
+		MotionMinArea:         motionMinArea,
+		MotionMaxFrames:       motionMaxFrames,
+		MotionWarmUpFrames:    motionWarmUpFrames,
+		CaptureCodec:          captureCodec,
+		CaptureFrameRate:      captureFrameRate,
 	}
 
 	mekStore := h.mekStoreFactory(c)
@@ -98,9 +158,13 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 	if err != nil {
 		if clients.IsClientValidationError(err) {
 			c.HTML(http.StatusBadRequest, "new-client", gin.H{
-				"Title":                "New Client",
-				"Error":                err.Error(),
-				"SupportedResolutions": h.clientService.GetSupportedDownscaleResolutions(),
+				"Title":                  "New Client",
+				"Error":                  err.Error(),
+				"SupportedResolutions":   h.clientService.GetSupportedDownscaleResolutions(),
+				"SupportedCaptureCodecs": h.clientService.GetSupportedCaptureCodecs(),
+				"SupportedOutputCodecs":  h.clientService.GetSupportedOutputCodecs(),
+				"SupportedOutputFormats": h.clientService.GetSupportedOutputFormats(),
+				"SupportedVideoBitrates": h.clientService.GetSupportedVideoBitrates(),
 			})
 			return
 		}
@@ -126,6 +190,14 @@ func (h *ClientHandler) UpdateClientSettings(c *gin.Context) {
 	motionOnly := c.PostForm("motion_only") == "on"
 	grayscale := c.PostForm("grayscale") == "on"
 	downscaleResolution := c.PostForm("downscale_resolution")
+	outputFormat := c.PostForm("output_format")
+	outputCodec := c.PostForm("output_codec")
+	videoBitRate := c.PostForm("video_bitrate")
+	motionMinAreaStr := c.PostForm("motion_min_area")
+	motionMaxFramesStr := c.PostForm("motion_max_frames")
+	motionWarmUpFramesStr := c.PostForm("motion_warm_up_frames")
+	captureCodec := c.PostForm("capture_codec")
+	captureFrameRateStr := c.PostForm("capture_frame_rate")
 
 	if id == "" || clipDurationStr == "" || storageLimitStr == "" {
 		c.HTML(http.StatusBadRequest, "clients", gin.H{
@@ -153,6 +225,42 @@ func (h *ClientHandler) UpdateClientSettings(c *gin.Context) {
 		return
 	}
 
+	motionMinArea, err := strconv.Atoi(motionMinAreaStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{
+			"Title": "Clients",
+			"Error": "Invalid motion min area.",
+		})
+		return
+	}
+
+	motionMaxFrames, err := strconv.Atoi(motionMaxFramesStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{
+			"Title": "Clients",
+			"Error": "Invalid motion max frames.",
+		})
+		return
+	}
+
+	motionWarmUpFrames, err := strconv.Atoi(motionWarmUpFramesStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{
+			"Title": "Clients",
+			"Error": "Invalid motion warm up frames.",
+		})
+		return
+	}
+
+	captureFrameRate, err := strconv.ParseFloat(captureFrameRateStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{
+			"Title": "Clients",
+			"Error": "Invalid capture frame rate.",
+		})
+		return
+	}
+
 	req := clients.UpdateClientSettingsRequest{
 		ID:                    id,
 		StorageLimitMegabytes: storageLimit,
@@ -160,6 +268,14 @@ func (h *ClientHandler) UpdateClientSettings(c *gin.Context) {
 		MotionOnly:            motionOnly,
 		Grayscale:             grayscale,
 		DownscaleResolution:   downscaleResolution,
+		OutputFormat:          outputFormat,
+		OutputCodec:           outputCodec,
+		VideoBitRate:          videoBitRate,
+		MotionMinArea:         motionMinArea,
+		MotionMaxFrames:       motionMaxFrames,
+		MotionWarmUpFrames:    motionWarmUpFrames,
+		CaptureCodec:          captureCodec,
+		CaptureFrameRate:      captureFrameRate,
 	}
 
 	err = h.clientService.UpdateClientSettings(req)
@@ -167,10 +283,14 @@ func (h *ClientHandler) UpdateClientSettings(c *gin.Context) {
 		if clients.IsClientValidationError(err) {
 			clientList, _ := h.clientService.GetClients()
 			c.HTML(http.StatusBadRequest, "clients", gin.H{
-				"Title":                "Clients",
-				"Error":                err.Error(),
-				"Clients":              clientList,
-				"SupportedResolutions": h.clientService.GetSupportedDownscaleResolutions(),
+				"Title":                  "Clients",
+				"Error":                  err.Error(),
+				"Clients":                clientList,
+				"SupportedResolutions":   h.clientService.GetSupportedDownscaleResolutions(),
+				"SupportedCaptureCodecs": h.clientService.GetSupportedCaptureCodecs(),
+				"SupportedOutputCodecs":  h.clientService.GetSupportedOutputCodecs(),
+				"SupportedOutputFormats": h.clientService.GetSupportedOutputFormats(),
+				"SupportedVideoBitrates": h.clientService.GetSupportedVideoBitrates(),
 			})
 			return
 		}

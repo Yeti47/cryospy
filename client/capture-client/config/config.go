@@ -8,20 +8,13 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	ClientID            string `json:"client_id"`
-	ClientSecret        string `json:"client_secret"`
-	ServerURL           string `json:"server_url"`
-	CameraDevice        string `json:"camera_device"`
-	BufferSize          int    `json:"buffer_size"`           // Number of clips to buffer in memory
-	SettingsSyncSeconds int    `json:"settings_sync_seconds"` // How often to sync settings from server (in seconds)
-
-	// Video processing configuration
-	VideoCodec        string  `json:"video_codec"`         // Video codec for processing (e.g., "mpeg4", "libopenh264")
-	VideoOutputFormat string  `json:"video_output_format"` // Output container format (e.g., "mp4", "avi")
-	VideoBitRate      string  `json:"video_bitrate"`       // Video bitrate for compression (e.g., "500k", "1M")
-	CaptureCodec      string  `json:"capture_codec"`       // Codec for initial capture (e.g., "MJPG", "MP4V")
-	CaptureFrameRate  float64 `json:"capture_framerate"`   // Frame rate for video capture (e.g., 15.0, 30.0)
-	MotionMinArea     int     `json:"motion_min_area"`     // Minimum contour area to be considered motion
+	ClientID             string `json:"client_id"`
+	ClientSecret         string `json:"client_secret"`
+	ServerURL            string `json:"server_url"`
+	CameraDevice         string `json:"camera_device"`
+	BufferSize           int    `json:"buffer_size"`            // Number of clips to buffer in memory
+	SettingsSyncSeconds  int    `json:"settings_sync_seconds"`  // How often to sync settings from server (in seconds)
+	ServerTimeoutSeconds int    `json:"server_timeout_seconds"` // HTTP timeout for server requests (in seconds)
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -31,20 +24,13 @@ func LoadConfig(filename string) (*Config, error) {
 		if os.IsNotExist(err) {
 			// Config file doesn't exist, create a default one
 			defaultConfig := &Config{
-				ClientID:            "your-client-id",
-				ClientSecret:        "your-client-secret",
-				ServerURL:           "http://localhost:8080",
-				CameraDevice:        "/dev/video0",
-				BufferSize:          3,
-				SettingsSyncSeconds: 300, // 5 minutes default
-
-				// Video processing defaults
-				VideoCodec:        "libx264",
-				VideoOutputFormat: "mp4",
-				VideoBitRate:      "500k",
-				CaptureCodec:      "MJPG",
-				CaptureFrameRate:  15.0,
-				MotionMinArea:     1000, // Default minimum area for motion detection
+				ClientID:             "your-client-id",
+				ClientSecret:         "your-client-secret",
+				ServerURL:            "http://localhost:8080",
+				CameraDevice:         "/dev/video0",
+				BufferSize:           3,
+				SettingsSyncSeconds:  300, // 5 minutes default
+				ServerTimeoutSeconds: 30,  // 30 seconds default
 			}
 			if err := saveConfig(filename, defaultConfig); err != nil {
 				return nil, fmt.Errorf("failed to create default config file: %w", err)
@@ -70,25 +56,8 @@ func LoadConfig(filename string) (*Config, error) {
 	if config.SettingsSyncSeconds == 0 {
 		config.SettingsSyncSeconds = 300 // 5 minutes default
 	}
-
-	// Set video processing defaults
-	if config.VideoCodec == "" {
-		config.VideoCodec = "mpeg4"
-	}
-	if config.VideoOutputFormat == "" {
-		config.VideoOutputFormat = "mp4"
-	}
-	if config.VideoBitRate == "" {
-		config.VideoBitRate = "500k"
-	}
-	if config.CaptureCodec == "" {
-		config.CaptureCodec = "MJPG"
-	}
-	if config.CaptureFrameRate == 0 {
-		config.CaptureFrameRate = 15.0
-	}
-	if config.MotionMinArea == 0 {
-		config.MotionMinArea = 1000
+	if config.ServerTimeoutSeconds == 0 {
+		config.ServerTimeoutSeconds = 30 // 30 seconds default
 	}
 
 	return &config, nil
@@ -96,19 +65,13 @@ func LoadConfig(filename string) (*Config, error) {
 
 // ConfigOverrides holds potential override values for configuration
 type ConfigOverrides struct {
-	ClientID            *string
-	ClientSecret        *string
-	ServerURL           *string
-	CameraDevice        *string
-	BufferSize          *int
-	SettingsSyncSeconds *int
-	VideoCodec          *string
-	VideoOutputFormat   *string
-	VideoBitRate        *string
-	CaptureCodec        *string
-	CaptureFrameRate    *float64
-	MotionSensitivity   *float64
-	MotionMinArea       *int
+	ClientID             *string
+	ClientSecret         *string
+	ServerURL            *string
+	CameraDevice         *string
+	BufferSize           *int
+	SettingsSyncSeconds  *int
+	ServerTimeoutSeconds *int
 }
 
 // Override allows overriding specific configuration values using ConfigOverrides struct
@@ -131,25 +94,8 @@ func (c *Config) Override(overrides ConfigOverrides) {
 	if overrides.SettingsSyncSeconds != nil && *overrides.SettingsSyncSeconds > 0 {
 		c.SettingsSyncSeconds = *overrides.SettingsSyncSeconds
 	}
-
-	// Video processing parameter overrides
-	if overrides.VideoCodec != nil && *overrides.VideoCodec != "" {
-		c.VideoCodec = *overrides.VideoCodec
-	}
-	if overrides.VideoOutputFormat != nil && *overrides.VideoOutputFormat != "" {
-		c.VideoOutputFormat = *overrides.VideoOutputFormat
-	}
-	if overrides.VideoBitRate != nil && *overrides.VideoBitRate != "" {
-		c.VideoBitRate = *overrides.VideoBitRate
-	}
-	if overrides.CaptureCodec != nil && *overrides.CaptureCodec != "" {
-		c.CaptureCodec = *overrides.CaptureCodec
-	}
-	if overrides.CaptureFrameRate != nil && *overrides.CaptureFrameRate > 0 {
-		c.CaptureFrameRate = *overrides.CaptureFrameRate
-	}
-	if overrides.MotionMinArea != nil && *overrides.MotionMinArea > 0 {
-		c.MotionMinArea = *overrides.MotionMinArea
+	if overrides.ServerTimeoutSeconds != nil && *overrides.ServerTimeoutSeconds > 0 {
+		c.ServerTimeoutSeconds = *overrides.ServerTimeoutSeconds
 	}
 }
 
