@@ -37,7 +37,8 @@ const (
 
 type PlaylistGenerator interface {
 	// GeneratePlaylist generates a playlist for the given clips.
-	GeneratePlaylist(clips []*videos.ClipInfo, isLive bool) (string, error)
+	// hasMoreClips indicates whether there are more clips beyond the current set
+	GeneratePlaylist(clips []*videos.ClipInfo, virtualTime time.Time, hasMoreClips bool) (string, error)
 }
 
 type M3U8PlaylistGenerator struct {
@@ -57,8 +58,8 @@ func NewM3U8PlaylistGenerator(logger logging.Logger) *M3U8PlaylistGenerator {
 	}
 }
 
-func (p *M3U8PlaylistGenerator) GeneratePlaylist(clips []*videos.ClipInfo, isLive bool) (string, error) {
-	p.logger.Info("Generating M3U8 playlist for clips", "count", len(clips))
+func (p *M3U8PlaylistGenerator) GeneratePlaylist(clips []*videos.ClipInfo, virtualTime time.Time, hasMoreClips bool) (string, error) {
+	p.logger.Info("Generating M3U8 playlist for clips", "count", len(clips), "hasMoreClips", hasMoreClips)
 
 	builder := &strings.Builder{}
 
@@ -73,9 +74,14 @@ func (p *M3U8PlaylistGenerator) GeneratePlaylist(clips []*videos.ClipInfo, isLiv
 			return clips[i].TimeStamp.Before(clips[j].TimeStamp)
 		})
 		duration = p.findMaxDuration(clips)
-		sequenceNumber = p.seqGen.GetSequenceNumber(clips[0])
+
+		// Always use virtual time for sequence calculation to maintain continuity
+		// The sequence number should advance with virtual time for proper HLS behavior
+		sequenceNumber = p.seqGen.GetStreamSequenceNumber(virtualTime, time.Duration(duration)*time.Second)
 	} else {
 		p.logger.Warn("No clips supplied, generating empty playlist")
+		// Use virtual time for sequence numbering even for empty playlists
+		sequenceNumber = p.seqGen.GetStreamSequenceNumber(virtualTime, 30*time.Second)
 	}
 
 	builder.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", duration))
@@ -88,8 +94,11 @@ func (p *M3U8PlaylistGenerator) GeneratePlaylist(clips []*videos.ClipInfo, isLiv
 		builder.WriteString("\n")
 	}
 
-	if !isLive {
+	// Add end marker only if there are no more clips available
+	// This provides clear feedback to HLS players that the stream has ended
+	if !hasMoreClips {
 		builder.WriteString("#EXT-X-ENDLIST\n")
+		p.logger.Debug("Added EXT-X-ENDLIST marker - no more clips available")
 	}
 
 	playlist := builder.String()

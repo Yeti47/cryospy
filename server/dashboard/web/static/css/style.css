@@ -1387,6 +1387,166 @@ table td a:hover {
     }
 }
 
+/* Motion details panel styling */
+.btn-motion-details {
+    background-color: var(--accent-color);
+    color: var(--text-color);
+    border: 1px solid var(--highlight-color);
+    border-radius: 15px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-motion-details:hover {
+    background-color: var(--highlight-color);
+    color: var(--primary-color);
+    box-shadow: 0 0 8px rgba(0, 242, 255, 0.4);
+}
+
+.motion-details-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: var(--primary-color);
+    border: 1px solid var(--accent-color);
+    border-radius: 8px;
+    grid-column: 1 / -1; /* Span full width */
+}
+
+.motion-details-panel strong {
+    color: var(--highlight-color);
+    display: block;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.motion-events {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.motion-event {
+    background-color: var(--secondary-color);
+    border: 1px solid var(--accent-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.motion-event:hover {
+    border-color: var(--highlight-color);
+    box-shadow: 0 0 8px rgba(0, 242, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.motion-event.current-segment {
+    border-color: var(--success-color);
+    background-color: rgba(77, 255, 77, 0.1);
+    box-shadow: 0 0 8px rgba(77, 255, 77, 0.3);
+}
+
+.motion-event.current-segment:hover {
+    box-shadow: 0 0 12px rgba(77, 255, 77, 0.5);
+}
+
+.motion-event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.motion-event-index {
+    background-color: var(--highlight-color);
+    color: var(--primary-color);
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    min-width: 24px;
+    text-align: center;
+}
+
+.motion-event-time {
+    color: var(--text-color);
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.current-indicator {
+    background-color: var(--success-color);
+    color: var(--primary-color);
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    animation: pulse-current 2s ease-in-out infinite;
+}
+
+@keyframes pulse-current {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.motion-event-title {
+    color: var(--accent-color);
+    font-size: 0.8rem;
+    word-break: break-all;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+}
+
+.motion-event-action {
+    color: var(--highlight-color);
+    font-size: 0.7rem;
+    font-style: italic;
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+.motion-event:hover .motion-event-action {
+    opacity: 1;
+}
+
+.no-motion-events {
+    color: var(--accent-color);
+    font-style: italic;
+    text-align: center;
+    margin: 1rem 0;
+}
+
+/* Responsive motion details */
+@media (max-width: 768px) {
+    .motion-event-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .motion-event-time {
+        font-size: 0.8rem;
+    }
+    
+    .btn-motion-details {
+        margin-left: 0;
+        margin-top: 0.5rem;
+        display: block;
+    }
+}
+
 /* Add navigation link styling for stream */
 header nav ul li a[href="/stream"] {
     color: var(--text-color);
@@ -1400,4 +1560,19 @@ header nav ul li a[href="/stream"]:hover,
 header nav ul li a[href="/stream"].active {
     background-color: var(--accent-color);
     color: var(--highlight-color);
+}
+
+/* Clickable motion badge styling */
+.motion-badge-clickable {
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+.motion-badge-clickable:hover {
+    background-color: rgba(77, 255, 77, 0.1);
+    transform: scale(1.02);
+}
+
+.motion-badge-clickable:active {
+    transform: scale(0.98);
 }

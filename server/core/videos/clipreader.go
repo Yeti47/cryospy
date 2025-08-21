@@ -256,10 +256,22 @@ func (r *clipReader) GetClipInfosByReferenceTime(clientID string, referenceTime 
 		return nil, err
 	}
 
-	// Combine the before clip with the after clips
+	// Combine the before clip with the after clips, but only include the "before" clip
+	// if it's still "active" (i.e., the reference time is within the clip's duration)
 	clips := make([]*ClipInfo, 0, len(beforeClips)+len(afterClips))
 	if len(beforeClips) > 0 {
-		clips = append(clips, beforeClips[0]) // Add the "before" clip
+		beforeClip := beforeClips[0]
+		clipEndTime := beforeClip.TimeStamp.Add(beforeClip.Duration)
+
+		// Only include the "before" clip if the reference time is within its duration
+		if referenceTime.Before(clipEndTime) || referenceTime.Equal(clipEndTime) {
+			clips = append(clips, beforeClip)
+		} else {
+			r.logger.Debug("Before clip has ended, not including in playlist",
+				"clipID", beforeClip.ID,
+				"clipEndTime", clipEndTime,
+				"referenceTime", referenceTime)
+		}
 	}
 	clips = append(clips, afterClips...)
 

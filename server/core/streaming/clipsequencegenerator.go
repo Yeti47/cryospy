@@ -1,11 +1,13 @@
 package streaming
 
-import "github.com/yeti47/cryospy/server/core/videos"
+import (
+	"time"
+)
 
 type ClipSequenceGenerator interface {
-	// GetSequenceNumber returns the sequence number for the given clip.
-	// Sequence numbers are used to order clips in a sequence and are unique for each clip within the same client.
-	GetSequenceNumber(clip *videos.ClipInfo) int64
+	// GetStreamSequenceNumber returns a sequence number for a stream position based on virtual time
+	// This provides continuous sequence numbering for HLS streams
+	GetStreamSequenceNumber(virtualTime time.Time, segmentDuration time.Duration) int64
 }
 
 type ChronoClipSequenceGenerator struct {
@@ -15,10 +17,20 @@ func NewChronoClipSequenceGenerator() *ChronoClipSequenceGenerator {
 	return &ChronoClipSequenceGenerator{}
 }
 
-func (g *ChronoClipSequenceGenerator) GetSequenceNumber(clip *videos.ClipInfo) int64 {
-
+func (g *ChronoClipSequenceGenerator) GetStreamSequenceNumber(virtualTime time.Time, segmentDuration time.Duration) int64 {
 	// Use a custom epoch for smaller numbers.
 	const customEpoch = 1609459200 // January 1, 2021
 
-	return clip.TimeStamp.Unix() - customEpoch
+	// Calculate sequence number based on virtual time and typical segment duration
+	// This ensures continuous sequence numbers for HLS streams
+	virtualUnix := virtualTime.Unix() - customEpoch
+
+	// Use standard 30-second segments if duration is not provided or invalid
+	duration := segmentDuration.Seconds()
+	if duration <= 0 {
+		duration = 30.0
+	}
+
+	// Calculate sequence number as virtual time divided by segment duration
+	return int64(float64(virtualUnix) / duration)
 }

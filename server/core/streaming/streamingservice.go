@@ -56,17 +56,44 @@ func (s *streamingService) GetPlaylist(clientID string, startTime time.Time, ref
 
 	s.logger.Debug("Getting clip infos for playlist", "clientID", clientID, "virtualNow", virtualNow, "lookAhead", lookAhead)
 
-	// Get clip infos based on the virtual now
-	clipInfos, err := s.clipReader.GetClipInfosByReferenceTime(clientID, virtualNow, lookAhead)
+	// Get clip infos with extended lookAhead to detect if more clips are available
+	// We query for lookAhead+1 clips, then check if we actually got more than lookAhead
+	// Note: GetClipInfosByReferenceTime returns "before" clip + "after" clips
+	extendedClipInfos, err := s.clipReader.GetClipInfosByReferenceTime(clientID, virtualNow, lookAhead+1)
 	if err != nil {
 		s.logger.Error("Failed to get clip infos for playlist", err)
 		return "", err
 	}
 
-	s.logger.Debug("Found clip infos", "clientID", clientID, "clipCount", len(clipInfos))
+	// Take only the clips we need for the playlist (up to lookAhead)
+	var clipInfos []*videos.ClipInfo
+	if len(extendedClipInfos) > lookAhead {
+		clipInfos = extendedClipInfos[:lookAhead]
+	} else {
+		clipInfos = extendedClipInfos
+	}
 
-	// Generate the playlist from clip infos
-	playlist, err := s.playlistGenerator.GeneratePlaylist(clipInfos, true) // we always want the behavior of a "live" playlist, since new clips may be added
+	// To determine if there are more clips, we need to count "after" clips only
+	// The first clip might be a "before" clip (timestamp <= virtualNow)
+	afterClipsCount := 0
+	for _, clip := range extendedClipInfos {
+		if clip.TimeStamp.After(virtualNow) || clip.TimeStamp.Equal(virtualNow) {
+			afterClipsCount++
+		}
+	}
+
+	// If we got more than lookAhead "after" clips, there are more clips available
+	hasMoreClips := afterClipsCount > lookAhead
+
+	s.logger.Debug("Clip availability check",
+		"clientID", clientID,
+		"clipCount", len(clipInfos),
+		"totalAvailable", len(extendedClipInfos),
+		"afterClipsCount", afterClipsCount,
+		"hasMoreClips", hasMoreClips)
+
+	// Generate the playlist from clip infos using the virtual time for continuous sequence numbering
+	playlist, err := s.playlistGenerator.GeneratePlaylist(clipInfos, virtualNow, hasMoreClips)
 	if err != nil {
 		s.logger.Error("Failed to generate playlist", err)
 		return "", err

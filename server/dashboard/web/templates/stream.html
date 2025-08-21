@@ -34,7 +34,14 @@
             <strong>Current Segment Motion:</strong> <span id="motionStatus">-</span>
         </div>
         <div class="info-item">
-            <strong>Footage Contains Motion:</strong> <span id="overallMotion">-</span>
+            <strong>Footage Contains Motion:</strong> 
+            <span id="overallMotion" class="motion-badge-clickable" style="cursor: pointer;">-</span>
+        </div>
+        <div id="motionDetails" class="motion-details-panel" style="display: none;">
+            <strong>Motion Detection Timeline:</strong>
+            <div id="motionTimeline" class="motion-timeline">
+                <!-- Motion events will be populated here -->
+            </div>
         </div>
     </div>
 </div>
@@ -56,6 +63,9 @@ const playlistUrl = `/stream/${clientId}/playlist.m3u8?startTime=${encodeURIComp
 let hls;
 let playlistSegments = []; // Store parsed segment metadata
 let currentSegmentIndex = -1;
+let retryCount = 0;
+let maxRetries = 5;
+let retryDelay = 2000; // Start with 2 seconds
 
 // Parse playlist to extract segment metadata
 function parsePlaylistMetadata(playlistText) {
@@ -97,6 +107,7 @@ function updateStreamInfo() {
     const currentClipEl = document.getElementById('currentClip');
     const motionStatusEl = document.getElementById('motionStatus');
     const overallMotionEl = document.getElementById('overallMotion');
+    const motionDetailsToggle = document.getElementById('motionDetailsToggle');
     
     if (playlistSegments.length > 0) {
         // Show the earliest recording time as when footage begins
@@ -108,8 +119,9 @@ function updateStreamInfo() {
         const motionSegmentCount = playlistSegments.filter(segment => segment.hasMotion).length;
         
         if (hasAnyMotion) {
-            overallMotionEl.textContent = `Yes (${motionSegmentCount}/${playlistSegments.length} segments)`;
-            overallMotionEl.className = 'motion';
+            overallMotionEl.textContent = `Yes (${motionSegmentCount}/${playlistSegments.length} segments) ▼`;
+            overallMotionEl.className = 'motion motion-badge-clickable';
+            updateMotionDetails();
         } else {
             overallMotionEl.textContent = 'No motion detected';
             overallMotionEl.className = 'no-motion';
@@ -122,7 +134,85 @@ function updateStreamInfo() {
             motionStatusEl.textContent = currentSegment.hasMotion ? 'Yes' : 'No';
             motionStatusEl.className = currentSegment.hasMotion ? 'motion' : 'no-motion';
         }
+    } else {
+        // No segments available - show the no segments message
+        showNoSegmentsMessage();
     }
+}
+
+// Update motion detection details
+function updateMotionDetails() {
+    const motionTimeline = document.getElementById('motionTimeline');
+    const motionSegments = playlistSegments.filter(segment => segment.hasMotion);
+    
+    if (motionSegments.length === 0) {
+        motionTimeline.innerHTML = '<p class="no-motion-events">No motion events found in loaded footage.</p>';
+        return;
+    }
+    
+    let html = '<div class="motion-events">';
+    motionSegments.forEach((segment, index) => {
+        const recordingTime = segment.recordedAt.toLocaleString();
+        const isCurrentSegment = currentSegmentIndex >= 0 && 
+            playlistSegments[currentSegmentIndex] && 
+            playlistSegments[currentSegmentIndex].url === segment.url;
+        
+        // Find the original index of this segment in the full playlist
+        const originalIndex = playlistSegments.findIndex(s => s.url === segment.url);
+        const jumpTime = originalIndex * 30; // Calculate playback time (assuming 30s segments)
+        
+        html += `
+            <div class="motion-event ${isCurrentSegment ? 'current-segment' : ''}" onclick="jumpToSegment(${jumpTime})" style="cursor: pointer;">
+                <div class="motion-event-header">
+                    <span class="motion-event-index">#${index + 1}</span>
+                    <span class="motion-event-time">${recordingTime}</span>
+                    ${isCurrentSegment ? '<span class="current-indicator">Currently Playing</span>' : ''}
+                </div>
+                <div class="motion-event-title">${segment.title}</div>
+                <div class="motion-event-action">Click to jump to this segment</div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    motionTimeline.innerHTML = html;
+}
+
+// Jump to a specific segment in the video player
+function jumpToSegment(timeInSeconds) {
+    if (video && !isNaN(timeInSeconds) && timeInSeconds >= 0) {
+        video.currentTime = timeInSeconds;
+        
+        // If the video is paused, start playing after jumping
+        if (video.paused) {
+            video.play().catch(err => {
+                console.warn('Could not auto-play after jumping:', err);
+            });
+        }
+        
+        // Update status to show we're seeking
+        statusEl.textContent = 'Seeking...';
+        
+        // The timeupdate event will automatically update the current segment index
+        // and refresh the motion details to show the new current segment
+    }
+}
+
+// Show helpful message when no segments are available
+function showNoSegmentsMessage() {
+    const streamStartEl = document.getElementById('streamStart');
+    const currentClipEl = document.getElementById('currentClip');
+    const motionStatusEl = document.getElementById('motionStatus');
+    const overallMotionEl = document.getElementById('overallMotion');
+    
+    streamStartEl.textContent = 'No footage available';
+    currentClipEl.textContent = 'No video segments found for the selected time range';
+    motionStatusEl.textContent = 'N/A';
+    overallMotionEl.textContent = 'No data available';
+    
+    // Hide motion details if visible
+    const motionDetails = document.getElementById('motionDetails');
+    motionDetails.style.display = 'none';
 }
 
 // Find current segment based on video current time
@@ -147,6 +237,11 @@ function updateCurrentSegment() {
     if (newIndex !== currentSegmentIndex) {
         currentSegmentIndex = newIndex;
         updateStreamInfo();
+        // Update motion details if the panel is visible and motion events exist
+        const motionDetails = document.getElementById('motionDetails');
+        if (motionDetails.style.display !== 'none' && playlistSegments.some(s => s.hasMotion)) {
+            updateMotionDetails();
+        }
     }
 }
 
@@ -155,15 +250,24 @@ function initializePlayer() {
         hls = new Hls({
             debug: false,
             enableWorker: true,
-            liveSyncDurationCount: 3, // Adjust for live stream latency
+            liveSyncDurationCount: 3,
             liveMaxLatencyDurationCount: 10,
             maxBufferLength: 30,
             maxMaxBufferLength: 600,
             maxBufferSize: 60 * 1000 * 1000, // 60MB
             maxBufferHole: 0.5,
-            // Enable low latency mode
             lowLatencyMode: true,
             backBufferLength: 90,
+            // Retry and loading configuration to prevent flooding
+            manifestLoadingTimeOut: 10000, // 10 seconds timeout
+            manifestLoadingMaxRetry: 3, // Limit manifest retries
+            manifestLoadingRetryDelay: 2000, // 2 second delay between retries
+            levelLoadingTimeOut: 10000,
+            levelLoadingMaxRetry: 2, // Limit level loading retries
+            levelLoadingRetryDelay: 2000,
+            fragLoadingTimeOut: 20000,
+            fragLoadingMaxRetry: 3,
+            fragLoadingRetryDelay: 1000,
             // Custom loader to ensure proper relative URL resolution
             loader: Hls.DefaultConfig.loader
         });
@@ -173,6 +277,8 @@ function initializePlayer() {
 
         hls.on(Hls.Events.MANIFEST_PARSED, function() {
             statusEl.textContent = 'Ready to play';
+            retryCount = 0; // Reset retry count on successful load
+            statusEl.style.color = ''; // Reset error color
             
             // Fetch and parse the playlist to extract metadata
             fetch(playlistUrl)
@@ -180,6 +286,14 @@ function initializePlayer() {
                 .then(playlistText => {
                     playlistSegments = parsePlaylistMetadata(playlistText);
                     updateStreamInfo();
+                    
+                    // If we successfully parsed the playlist but found no segments,
+                    // it means the time range has no footage
+                    if (playlistSegments.length === 0) {
+                        console.log('Playlist loaded successfully but contains no segments');
+                        statusEl.textContent = 'No footage available for this time range';
+                        statusEl.style.color = 'var(--error-color)';
+                    }
                 })
                 .catch(err => {
                     console.warn('Failed to fetch playlist for metadata:', err);
@@ -188,11 +302,34 @@ function initializePlayer() {
 
         hls.on(Hls.Events.ERROR, function(event, data) {
             console.error('HLS Error:', data);
+            
             if (data.fatal) {
                 switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
-                        statusEl.textContent = 'Network error - retrying...';
-                        hls.startLoad();
+                        if (data.details === 'levelEmptyError' || data.details === 'levelParsingError') {
+                            statusEl.textContent = 'No video segments available for this time range';
+                            
+                            // Implement exponential backoff to prevent flooding
+                            if (retryCount < maxRetries) {
+                                retryCount++;
+                                const currentDelay = retryDelay * Math.pow(2, retryCount - 1);
+                                statusEl.textContent = `No segments available - retrying in ${currentDelay/1000}s (${retryCount}/${maxRetries})`;
+                                
+                                setTimeout(() => {
+                                    console.log(`Retry attempt ${retryCount}/${maxRetries} after ${currentDelay}ms`);
+                                    hls.startLoad();
+                                }, currentDelay);
+                            } else {
+                                statusEl.textContent = 'No video segments found - maximum retries reached';
+                                statusEl.style.color = 'var(--error-color)';
+                                showNoSegmentsMessage();
+                                console.error('Maximum retry attempts reached. Stopping further requests.');
+                                return; // Stop retrying
+                            }
+                        } else {
+                            statusEl.textContent = 'Network error - retrying...';
+                            hls.startLoad();
+                        }
                         break;
                     case Hls.ErrorTypes.MEDIA_ERROR:
                         statusEl.textContent = 'Media error - recovering...';
@@ -203,6 +340,9 @@ function initializePlayer() {
                         hls.destroy();
                         break;
                 }
+            } else {
+                // Non-fatal errors - just log them
+                console.warn('Non-fatal HLS error:', data.details, data);
             }
         });
 
@@ -233,7 +373,32 @@ video.addEventListener('ended', () => statusEl.textContent = 'Ended');
 video.addEventListener('timeupdate', updateCurrentSegment);
 
 // Initialize the player when page loads
-document.addEventListener('DOMContentLoaded', initializePlayer);
+document.addEventListener('DOMContentLoaded', function() {
+    initializePlayer();
+    
+    // Set up motion details toggle - make the overall motion badge clickable
+    const overallMotionEl = document.getElementById('overallMotion');
+    const motionDetails = document.getElementById('motionDetails');
+    
+    overallMotionEl.addEventListener('click', function() {
+        // Only toggle if there's motion data to show
+        if (!overallMotionEl.classList.contains('motion-badge-clickable')) {
+            return;
+        }
+        
+        const isVisible = motionDetails.style.display !== 'none';
+        if (isVisible) {
+            motionDetails.style.display = 'none';
+            // Change arrow to indicate expandable
+            overallMotionEl.textContent = overallMotionEl.textContent.replace('▲', '▼');
+        } else {
+            motionDetails.style.display = 'block';
+            // Change arrow to indicate collapsible
+            overallMotionEl.textContent = overallMotionEl.textContent.replace('▼', '▲');
+            updateMotionDetails();
+        }
+    });
+});
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', function() {
