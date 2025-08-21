@@ -332,5 +332,5 @@ This software is provided for lawful surveillance and security purposes only. Us
 ---
 
 <div align="center">
-  <sub>Built with ❤️ for privacy-conscious home security</sub>
+  <sub>Built with 💙 for privacy-conscious home security</sub>
 </div>
