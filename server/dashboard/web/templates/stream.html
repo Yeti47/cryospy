@@ -1,0 +1,132 @@
+{{define "content"}}
+<div class="page-header">
+    <h2>Live Stream - {{.Client.ID}}</h2>
+    <div class="stream-controls">
+        <a href="/stream" class="btn btn-secondary">Back to Selection</a>
+    </div>
+</div>
+
+<div class="stream-container">
+    <video id="videoPlayer" controls muted playsinline>
+        <p>Your browser does not support HLS video streaming.</p>
+    </video>
+    
+    <div class="stream-info">
+        <div class="info-item">
+            <strong>Client:</strong> {{.Client.ID}}
+        </div>
+        <div class="info-item">
+            <strong>Start Time:</strong> <span id="startTime">{{.StartTime}}</span>
+        </div>
+        <div class="info-item">
+            <strong>Reference Time:</strong> <span id="refTime">{{.RefTime}}</span>
+        </div>
+        <div class="info-item">
+            <strong>Status:</strong> <span id="streamStatus">Initializing...</span>
+        </div>
+    </div>
+</div>
+
+<!-- HLS.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<script>
+const video = document.getElementById('videoPlayer');
+const statusEl = document.getElementById('streamStatus');
+
+const clientId = '{{.Client.ID}}';
+const startTime = '{{.StartTime}}';
+const refTime = '{{.RefTime}}';
+
+// Construct playlist URL
+const playlistUrl = `/stream/${clientId}/playlist.m3u8?startTime=${encodeURIComponent(startTime)}&refTime=${encodeURIComponent(refTime)}`;
+
+let hls;
+
+function initializePlayer() {
+    if (Hls.isSupported()) {
+        hls = new Hls({
+            debug: false,
+            enableWorker: true,
+            liveSyncDurationCount: 3, // Adjust for live stream latency
+            liveMaxLatencyDurationCount: 10,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 600,
+            maxBufferSize: 60 * 1000 * 1000, // 60MB
+            maxBufferHole: 0.5,
+            // Enable low latency mode
+            lowLatencyMode: true,
+            backBufferLength: 90,
+            // Custom loader to ensure proper relative URL resolution
+            loader: Hls.DefaultConfig.loader
+        });
+
+        hls.loadSource(playlistUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+            statusEl.textContent = 'Ready to play';
+        });
+
+        hls.on(Hls.Events.ERROR, function(event, data) {
+            console.error('HLS Error:', data);
+            if (data.fatal) {
+                switch (data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        statusEl.textContent = 'Network error - retrying...';
+                        hls.startLoad();
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        statusEl.textContent = 'Media error - recovering...';
+                        hls.recoverMediaError();
+                        break;
+                    default:
+                        statusEl.textContent = 'Fatal error - cannot recover';
+                        hls.destroy();
+                        break;
+                }
+            }
+        });
+
+        hls.on(Hls.Events.FRAG_LOADED, function() {
+            if (statusEl.textContent === 'Loading...' || statusEl.textContent === 'Initializing...') {
+                statusEl.textContent = 'Streaming';
+            }
+        });
+
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        video.src = playlistUrl;
+        statusEl.textContent = 'Ready to play (native)';
+    } else {
+        statusEl.textContent = 'HLS not supported in this browser';
+        console.error('HLS is not supported');
+    }
+}
+
+// Video event listeners
+video.addEventListener('loadstart', () => statusEl.textContent = 'Loading...');
+video.addEventListener('waiting', () => statusEl.textContent = 'Buffering...');
+video.addEventListener('playing', () => statusEl.textContent = 'Playing');
+video.addEventListener('pause', () => statusEl.textContent = 'Paused');
+video.addEventListener('ended', () => statusEl.textContent = 'Ended');
+
+// Initialize the player when page loads
+document.addEventListener('DOMContentLoaded', initializePlayer);
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    if (hls) {
+        hls.destroy();
+    }
+});
+
+// Format timestamps for display
+function formatTimestamp(isoString) {
+    return new Date(isoString).toLocaleString();
+}
+
+document.getElementById('startTime').textContent = formatTimestamp('{{.StartTime}}');
+document.getElementById('refTime').textContent = formatTimestamp('{{.RefTime}}');
+</script>
+{{end}}

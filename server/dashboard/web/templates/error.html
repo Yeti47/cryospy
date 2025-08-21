@@ -1,0 +1,79 @@
+{{define "content"}}
+<div class="error-container">
+    <div class="error-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+            <path d="m15 9-6 6" stroke="currentColor" stroke-width="2"/>
+            <path d="m9 9 6 6" stroke="currentColor" stroke-width="2"/>
+        </svg>
+    </div>
+    
+    <h2 class="error-title">{{.Title}}</h2>
+    
+    <p class="error-message">{{.Message}}</p>
+    
+    <div class="error-actions">
+        <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+        <a href="/" class="btn btn-primary">Home</a>
+    </div>
+</div>
+
+<style>
+.error-container {
+    text-align: center;
+    max-width: 500px;
+    margin: 4rem auto;
+    padding: 2rem;
+    background-color: var(--secondary-color);
+    border-radius: 8px;
+    border: 1px solid var(--accent-color);
+}
+
+.error-icon {
+    color: var(--error-color);
+    margin-bottom: 1.5rem;
+}
+
+.error-icon svg {
+    display: block;
+    margin: 0 auto;
+}
+
+.error-title {
+    color: var(--error-color);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.error-message {
+    color: var(--text-color);
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+    line-height: 1.5;
+}
+
+.error-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+    .error-container {
+        margin: 2rem 1rem;
+        padding: 1.5rem;
+    }
+    
+    .error-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .error-actions .btn {
+        width: 100%;
+        max-width: 200px;
+    }
+}
+</style>
+{{end}}

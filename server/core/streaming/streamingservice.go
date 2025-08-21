@@ -22,12 +22,12 @@ type streamingService struct {
 	config            config.StreamingSettings
 }
 
-func NewStreamingService(logger logging.Logger, clipReader videos.ClipReader, clipNormalizer ClipNormalizer, playlistGenerator PlaylistGenerator, config config.StreamingSettings) streamingService {
+func NewStreamingService(logger logging.Logger, clipReader videos.ClipReader, clipNormalizer ClipNormalizer, playlistGenerator PlaylistGenerator, config config.StreamingSettings) *streamingService {
 	if logger == nil {
 		logger = logging.NopLogger
 	}
 
-	return streamingService{
+	return &streamingService{
 		logger:            logger,
 		clipReader:        clipReader,
 		clipNormalizer:    clipNormalizer,
@@ -54,12 +54,16 @@ func (s *streamingService) GetPlaylist(clientID string, startTime time.Time, ref
 		lookAhead = 10 // Default to 10 clips if not configured
 	}
 
+	s.logger.Debug("Getting clip infos for playlist", "clientID", clientID, "virtualNow", virtualNow, "lookAhead", lookAhead)
+
 	// Get clip infos based on the virtual now
 	clipInfos, err := s.clipReader.GetClipInfosByReferenceTime(clientID, virtualNow, lookAhead)
 	if err != nil {
 		s.logger.Error("Failed to get clip infos for playlist", err)
 		return "", err
 	}
+
+	s.logger.Debug("Found clip infos", "clientID", clientID, "clipCount", len(clipInfos))
 
 	// Generate the playlist from clip infos
 	playlist, err := s.playlistGenerator.GeneratePlaylist(clipInfos, true) // we always want the behavior of a "live" playlist, since new clips may be added
@@ -72,10 +76,12 @@ func (s *streamingService) GetPlaylist(clientID string, startTime time.Time, ref
 }
 
 func (s *streamingService) GetSegment(clientID, clipID string, mekStore encryption.MekStore) ([]byte, error) {
+	s.logger.Debug("Getting segment", "clientID", clientID, "clipID", clipID)
+
 	// Get the clip by ID
 	clip, err := s.clipReader.GetClipByID(clipID, mekStore)
 	if err != nil {
-		s.logger.Error("Failed to get clip by ID", err)
+		s.logger.Error("Failed to get clip by ID", err, "clientID", clientID, "clipID", clipID)
 		return nil, err
 	}
 
@@ -84,12 +90,16 @@ func (s *streamingService) GetSegment(clientID, clipID string, mekStore encrypti
 		return nil, NewSegmentNotFoundError(clipID, clientID)
 	}
 
+	s.logger.Debug("Found clip, normalizing", "clientID", clientID, "clipID", clipID, "clipSize", len(clip.Video))
+
 	// Normalize the clip data for streaming
 	normalizedClip, err := s.clipNormalizer.NormalizeClip(clip)
 	if err != nil {
-		s.logger.Error("Failed to normalize clip for streaming", err)
+		s.logger.Error("Failed to normalize clip for streaming", err, "clientID", clientID, "clipID", clipID)
 		return nil, err
 	}
+
+	s.logger.Debug("Normalized clip successfully", "clientID", clientID, "clipID", clipID, "normalizedSize", len(normalizedClip))
 
 	return normalizedClip, nil
 }

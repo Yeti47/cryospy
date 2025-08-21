@@ -48,6 +48,12 @@ type StreamingSettings struct {
 	// Cache configuration
 	Cache     StreamingCacheSettings `json:"cache"`
 	LookAhead int                    `json:"look_ahead"` // Number of clips to look ahead for streaming
+
+	Width        int    `json:"width"`         // 480p width (16:9 aspect ratio)
+	Height       int    `json:"height"`        // 480p height
+	VideoBitrate string `json:"video_bitrate"` // 1 Mbps for decent quality at 480p
+	VideoCodec   string `json:"video_codec"`   // H.264 for compatibility
+	FrameRate    int    `json:"frame_rate"`    // 25 fps for efficient streaming
 }
 
 // StreamingCacheSettings contains configuration for the normalized clip cache
@@ -65,7 +71,12 @@ func DefaultStreamingSettings() StreamingSettings {
 			Enabled:      true,
 			MaxSizeBytes: 100 * 1024 * 1024, // 100MB default
 		},
-		LookAhead: 10, // Default to 10 clips lookahead
+		LookAhead:    10,        // Default to 10 clips lookahead
+		Width:        854,       // 480p width (16:9 aspect ratio)
+		Height:       480,       // 480p height
+		VideoBitrate: "1000k",   // 1 Mbps for decent quality at 480p
+		VideoCodec:   "libx264", // H.264 for compatibility
+		FrameRate:    25,        // 25 fps for efficient streaming
 	}
 }
 

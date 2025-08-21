@@ -13,6 +13,7 @@
             <ul>
                 <li><a href="/clients" class="{{ if eq .Title "Clients" }}active{{ end }}">Clients</a></li>
                 <li><a href="/clips" class="{{ if eq .Title "Clips" }}active{{ end }}">Clips</a></li>
+                <li><a href="/stream" class="{{ if or (eq .Title "Stream Selection") (contains .Title "Stream -") }}active{{ end }}">Stream</a></li>
                 <li><a href="/auth/logout">Logout</a></li>
             </ul>
         </nav>

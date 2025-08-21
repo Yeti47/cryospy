@@ -49,25 +49,8 @@ func DefaultNormalizationSettings() NormalizationSettings {
 	}
 }
 
-// NewFFmpegClipNormalizer creates a new FFmpeg-based clip normalizer
-func NewFFmpegClipNormalizer(logger logging.Logger, tempDir string) *FFmpegClipNormalizer {
-	if logger == nil {
-		logger = logging.NopLogger
-	}
-
-	if tempDir == "" {
-		tempDir = os.TempDir()
-	}
-
-	return &FFmpegClipNormalizer{
-		logger:   logger,
-		tempDir:  tempDir,
-		settings: DefaultNormalizationSettings(),
-	}
-}
-
-// NewFFmpegClipNormalizerWithSettings creates a new FFmpeg-based clip normalizer with custom settings
-func NewFFmpegClipNormalizerWithSettings(logger logging.Logger, tempDir string, settings NormalizationSettings) *FFmpegClipNormalizer {
+// NewFFmpegClipNormalizer creates a new FFmpeg-based clip normalizer with custom settings
+func NewFFmpegClipNormalizer(logger logging.Logger, tempDir string, settings NormalizationSettings) *FFmpegClipNormalizer {
 	if logger == nil {
 		logger = logging.NopLogger
 	}

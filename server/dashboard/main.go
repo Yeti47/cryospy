@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"text/template"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/yeti47/cryospy/server/core/clients"
 	"github.com/yeti47/cryospy/server/core/config"
 	"github.com/yeti47/cryospy/server/core/encryption"
+	"github.com/yeti47/cryospy/server/core/streaming"
 	"github.com/yeti47/cryospy/server/core/videos"
 	dashboard_sessions "github.com/yeti47/cryospy/server/dashboard/sessions"
 	"github.com/yeti47/cryospy/server/dashboard/web/handlers"
@@ -79,6 +81,31 @@ func main() {
 	clipDeleter := videos.NewClipDeleter(logger, clipRepo)
 	storageManager := videos.NewStorageManager(logger, clipRepo, clientRepo, nil, nil)
 
+	// Set up streaming services
+	normalizationSettings := streaming.DefaultNormalizationSettings()
+	if cfg.StreamingSettings != nil {
+		normalizationSettings.Width = cfg.StreamingSettings.Width
+		normalizationSettings.Height = cfg.StreamingSettings.Height
+		normalizationSettings.VideoBitrate = cfg.StreamingSettings.VideoBitrate
+		normalizationSettings.VideoCodec = cfg.StreamingSettings.VideoCodec
+		normalizationSettings.FrameRate = cfg.StreamingSettings.FrameRate
+	}
+	clipNormalizer := streaming.NewFFmpegClipNormalizer(logger, "", normalizationSettings)
+
+	// Set up caching if enabled
+	var cachedNormalizer streaming.ClipNormalizer = clipNormalizer
+	if cfg.StreamingSettings != nil && cfg.StreamingSettings.Cache.Enabled {
+		cache := streaming.NewNormalizedClipCache(cfg.StreamingSettings.Cache.MaxSizeBytes, logger)
+		cachedNormalizer = streaming.NewCachedClipNormalizer(clipNormalizer, cache, logger)
+	}
+
+	playlistGenerator := streaming.NewM3U8PlaylistGenerator(logger)
+	streamingConfig := config.StreamingSettings{LookAhead: 10}
+	if cfg.StreamingSettings != nil {
+		streamingConfig = *cfg.StreamingSettings
+	}
+	streamingService := streaming.NewStreamingService(logger, clipReader, cachedNormalizer, playlistGenerator, streamingConfig)
+
 	// Set up session store
 	sessionKey, err := dashboard_sessions.GetOrCreateSessionKey()
 	if err != nil {
@@ -101,6 +128,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(logger, mekService, mekStoreFactory)
 	clientHandler := handlers.NewClientHandler(logger, clientService, storageManager, mekStoreFactory)
 	clipHandler := handlers.NewClipHandler(logger, clipReader, clipDeleter, clientService, mekStoreFactory)
+	streamHandler := handlers.NewStreamHandler(logger, streamingService, clientService, mekStoreFactory)
 
 	// Set up middleware
 	authMiddleware := middleware.NewAuthMiddleware(logger, mekService, mekStoreFactory)
@@ -139,6 +167,14 @@ func main() {
 			clipGroup.GET("/:id/thumbnail", clipHandler.GetThumbnail)
 			clipGroup.GET("/:id/video", clipHandler.GetVideo)
 			clipGroup.POST("/delete", clipHandler.DeleteClips)
+		}
+
+		streamGroup := authedGroup.Group("/stream")
+		{
+			streamGroup.GET("", streamHandler.ShowStreamSelection)
+			streamGroup.GET("/:clientId", streamHandler.ShowStream)
+			streamGroup.GET("/:clientId/playlist.m3u8", streamHandler.GetPlaylist)
+			streamGroup.GET("/:clientId/segments/:clipId", streamHandler.GetSegment)
 		}
 	}
 
@@ -237,6 +273,9 @@ func createTemplateRenderer() multitemplate.Renderer {
 		"sub": func(a, b int64) int64 {
 			return a - b
 		},
+		"contains": func(s, substr string) bool {
+			return strings.Contains(s, substr)
+		},
 	}
 
 	r.AddFromFilesFuncs("layout", funcMap, "web/templates/layout.html")
@@ -246,5 +285,8 @@ func createTemplateRenderer() multitemplate.Renderer {
 	r.AddFromFilesFuncs("new-client", funcMap, "web/templates/layout.html", "web/templates/new-client.html")
 	r.AddFromFilesFuncs("clips", funcMap, "web/templates/layout.html", "web/templates/clips.html")
 	r.AddFromFilesFuncs("clip-detail", funcMap, "web/templates/layout.html", "web/templates/clip-detail.html")
+	r.AddFromFilesFuncs("stream-selection", funcMap, "web/templates/layout.html", "web/templates/stream-selection.html")
+	r.AddFromFilesFuncs("stream", funcMap, "web/templates/layout.html", "web/templates/stream.html")
+	r.AddFromFilesFuncs("error", funcMap, "web/templates/layout.html", "web/templates/error.html")
 	return r
 }

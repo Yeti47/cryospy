@@ -10,7 +10,7 @@ import (
 )
 
 func TestFFmpegClipNormalizer_NormalizeClip_Validation(t *testing.T) {
-	normalizer := NewFFmpegClipNormalizer(logging.NopLogger, "")
+	normalizer := NewFFmpegClipNormalizer(logging.NopLogger, "", DefaultNormalizationSettings())
 
 	tests := []struct {
 		name    string
@@ -81,7 +81,7 @@ func TestDefaultNormalizationSettings(t *testing.T) {
 
 func TestNewFFmpegClipNormalizer(t *testing.T) {
 	tempDir := "/tmp/test"
-	normalizer := NewFFmpegClipNormalizer(nil, tempDir)
+	normalizer := NewFFmpegClipNormalizer(nil, tempDir, DefaultNormalizationSettings())
 
 	if normalizer.logger == nil {
 		t.Error("Expected logger to be set (NopLogger)")
@@ -106,7 +106,7 @@ func TestNewFFmpegClipNormalizerWithSettings(t *testing.T) {
 		FrameRate:    30,
 	}
 
-	normalizer := NewFFmpegClipNormalizerWithSettings(nil, tempDir, customSettings)
+	normalizer := NewFFmpegClipNormalizer(nil, tempDir, customSettings)
 
 	if normalizer.settings != customSettings {
 		t.Error("Expected custom settings to be set")
@@ -115,7 +115,7 @@ func TestNewFFmpegClipNormalizerWithSettings(t *testing.T) {
 
 // Mock test for NormalizeClip - this would need a real video file to test properly
 func TestFFmpegClipNormalizer_NormalizeClip_MockValidation(t *testing.T) {
-	normalizer := NewFFmpegClipNormalizer(logging.NopLogger, "")
+	normalizer := NewFFmpegClipNormalizer(logging.NopLogger, "", DefaultNormalizationSettings())
 
 	// Test with invalid clip
 	_, err := normalizer.NormalizeClip(nil)
@@ -157,7 +157,7 @@ func TestFFmpegClipNormalizer_NormalizeClip_Integration(t *testing.T) {
 		}
 	}
 
-	normalizer := NewFFmpegClipNormalizer(logging.NopLogger, os.TempDir())
+	normalizer := NewFFmpegClipNormalizer(logging.NopLogger, os.TempDir(), DefaultNormalizationSettings())
 
 	// This would need a real video file to test with
 	// For now, we'll just test the structure

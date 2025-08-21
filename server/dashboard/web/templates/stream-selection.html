@@ -1,0 +1,55 @@
+{{define "content"}}
+<div class="page-header">
+    <h2>Video Stream Selection</h2>
+    <p>Select a client and configure streaming parameters to start viewing live video feed.</p>
+</div>
+
+<form id="streamForm" action="/stream" method="get" class="stream-selection-form">
+    <div class="form-group">
+        <label for="clientId">Select Client:</label>
+        <select id="clientId" name="clientId" required>
+            <option value="">Choose a client...</option>
+            {{range .Clients}}
+            <option value="{{.ID}}">{{.ID}}</option>
+            {{end}}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="refTime">Reference Time (optional):</label>
+        <input type="datetime-local" id="refTime" name="refTime" 
+               title="Select a specific point in time to start streaming from. Leave blank for current time.">
+        <small>Leave blank to stream from current time</small>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Start Streaming</button>
+        <a href="/clients" class="btn btn-secondary">Back to Clients</a>
+    </div>
+</form>
+
+<script>
+document.getElementById('streamForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const clientId = document.getElementById('clientId').value;
+    if (!clientId) {
+        alert('Please select a client');
+        return;
+    }
+    
+    const refTime = document.getElementById('refTime').value;
+    const startTime = new Date().toISOString();
+    
+    let url = `/stream/${clientId}?startTime=${encodeURIComponent(startTime)}`;
+    if (refTime) {
+        const refTimeISO = new Date(refTime).toISOString();
+        url += `&refTime=${encodeURIComponent(refTimeISO)}`;
+    } else {
+        url += `&refTime=${encodeURIComponent(startTime)}`;
+    }
+    
+    window.location.href = url;
+});
+</script>
+{{end}}
