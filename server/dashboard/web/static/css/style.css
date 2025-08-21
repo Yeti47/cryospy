@@ -1338,6 +1338,55 @@ table td a:hover {
     }
 }
 
+/* Motion detection status styling for streaming */
+#motionStatus, #overallMotion {
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-block;
+    min-width: 80px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+#motionStatus.motion, #overallMotion.motion {
+    background-color: rgba(77, 255, 77, 0.2);
+    color: var(--success-color);
+    border: 1px solid var(--success-color);
+    box-shadow: 0 0 8px rgba(77, 255, 77, 0.3);
+    animation: motion-pulse 2s ease-in-out infinite;
+}
+
+#motionStatus.no-motion, #overallMotion.no-motion {
+    background-color: rgba(255, 77, 77, 0.2);
+    color: var(--error-color);
+    border: 1px solid var(--error-color);
+}
+
+#motionStatus:not(.motion):not(.no-motion), #overallMotion:not(.motion):not(.no-motion) {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--accent-color);
+    border: 1px solid var(--accent-color);
+}
+
+/* Special styling for overall motion indicator */
+#overallMotion.motion {
+    text-transform: none; /* Allow lowercase text for the segment count */
+    min-width: 120px; /* Wider to accommodate segment count */
+}
+
+@keyframes motion-pulse {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(77, 255, 77, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 16px rgba(77, 255, 77, 0.6);
+    }
+}
+
 /* Add navigation link styling for stream */
 header nav ul li a[href="/stream"] {
     color: var(--text-color);

@@ -24,6 +24,18 @@
         <div class="info-item">
             <strong>Status:</strong> <span id="streamStatus">Initializing...</span>
         </div>
+        <div class="info-item">
+            <strong>Footage Begins:</strong> <span id="streamStart">-</span>
+        </div>
+        <div class="info-item">
+            <strong>Current Clip:</strong> <span id="currentClip">-</span>
+        </div>
+        <div class="info-item">
+            <strong>Current Segment Motion:</strong> <span id="motionStatus">-</span>
+        </div>
+        <div class="info-item">
+            <strong>Footage Contains Motion:</strong> <span id="overallMotion">-</span>
+        </div>
     </div>
 </div>
 
@@ -42,6 +54,101 @@ const refTime = '{{.RefTime}}';
 const playlistUrl = `/stream/${clientId}/playlist.m3u8?startTime=${encodeURIComponent(startTime)}&refTime=${encodeURIComponent(refTime)}`;
 
 let hls;
+let playlistSegments = []; // Store parsed segment metadata
+let currentSegmentIndex = -1;
+
+// Parse playlist to extract segment metadata
+function parsePlaylistMetadata(playlistText) {
+    const lines = playlistText.split('\n');
+    const segments = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#EXTINF:')) {
+            // Extract metadata from EXTINF line
+            const metadataMatch = line.match(/#EXTINF:[^,]*,(.*)$/);
+            if (metadataMatch && metadataMatch[1]) {
+                try {
+                    const metadata = JSON.parse(metadataMatch[1]);
+                    // Get the segment URL from the next line
+                    const urlLine = lines[i + 1];
+                    if (urlLine && !urlLine.startsWith('#')) {
+                        segments.push({
+                            url: urlLine.trim(),
+                            title: metadata.title || 'Unknown',
+                            recordedAt: new Date(metadata.recorded_at),
+                            hasMotion: metadata.motion || false,
+                            index: segments.length
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Failed to parse segment metadata:', metadataMatch[1]);
+                }
+            }
+        }
+    }
+    
+    return segments;
+}
+
+// Update stream info display
+function updateStreamInfo() {
+    const streamStartEl = document.getElementById('streamStart');
+    const currentClipEl = document.getElementById('currentClip');
+    const motionStatusEl = document.getElementById('motionStatus');
+    const overallMotionEl = document.getElementById('overallMotion');
+    
+    if (playlistSegments.length > 0) {
+        // Show the earliest recording time as when footage begins
+        const earliestSegment = playlistSegments[0];
+        streamStartEl.textContent = earliestSegment.recordedAt.toLocaleString();
+        
+        // Calculate overall motion status for all loaded footage
+        const hasAnyMotion = playlistSegments.some(segment => segment.hasMotion);
+        const motionSegmentCount = playlistSegments.filter(segment => segment.hasMotion).length;
+        
+        if (hasAnyMotion) {
+            overallMotionEl.textContent = `Yes (${motionSegmentCount}/${playlistSegments.length} segments)`;
+            overallMotionEl.className = 'motion';
+        } else {
+            overallMotionEl.textContent = 'No motion detected';
+            overallMotionEl.className = 'no-motion';
+        }
+        
+        // Update current clip info if we have a current segment
+        if (currentSegmentIndex >= 0 && currentSegmentIndex < playlistSegments.length) {
+            const currentSegment = playlistSegments[currentSegmentIndex];
+            currentClipEl.textContent = `${currentSegment.title} (${currentSegment.recordedAt.toLocaleString()})`;
+            motionStatusEl.textContent = currentSegment.hasMotion ? 'Yes' : 'No';
+            motionStatusEl.className = currentSegment.hasMotion ? 'motion' : 'no-motion';
+        }
+    }
+}
+
+// Find current segment based on video current time
+function updateCurrentSegment() {
+    if (!video || !playlistSegments.length) return;
+    
+    const currentTime = video.currentTime;
+    let segmentTime = 0;
+    let newIndex = -1;
+    
+    // Calculate which segment should be playing based on cumulative duration
+    for (let i = 0; i < playlistSegments.length; i++) {
+        // Assume each segment is roughly the same duration (we could parse this from EXTINF if needed)
+        const segmentDuration = 30; // Default duration, could be made more precise
+        if (currentTime >= segmentTime && currentTime < segmentTime + segmentDuration) {
+            newIndex = i;
+            break;
+        }
+        segmentTime += segmentDuration;
+    }
+    
+    if (newIndex !== currentSegmentIndex) {
+        currentSegmentIndex = newIndex;
+        updateStreamInfo();
+    }
+}
 
 function initializePlayer() {
     if (Hls.isSupported()) {
@@ -66,6 +173,17 @@ function initializePlayer() {
 
         hls.on(Hls.Events.MANIFEST_PARSED, function() {
             statusEl.textContent = 'Ready to play';
+            
+            // Fetch and parse the playlist to extract metadata
+            fetch(playlistUrl)
+                .then(response => response.text())
+                .then(playlistText => {
+                    playlistSegments = parsePlaylistMetadata(playlistText);
+                    updateStreamInfo();
+                })
+                .catch(err => {
+                    console.warn('Failed to fetch playlist for metadata:', err);
+                });
         });
 
         hls.on(Hls.Events.ERROR, function(event, data) {
@@ -110,6 +228,9 @@ video.addEventListener('waiting', () => statusEl.textContent = 'Buffering...');
 video.addEventListener('playing', () => statusEl.textContent = 'Playing');
 video.addEventListener('pause', () => statusEl.textContent = 'Paused');
 video.addEventListener('ended', () => statusEl.textContent = 'Ended');
+
+// Track current segment during playback
+video.addEventListener('timeupdate', updateCurrentSegment);
 
 // Initialize the player when page loads
 document.addEventListener('DOMContentLoaded', initializePlayer);
