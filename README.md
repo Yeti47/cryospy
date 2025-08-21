@@ -329,12 +329,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 This software is provided for lawful surveillance and security purposes only. Users are responsible for ensuring compliance with all applicable laws and regulations regarding video recording, privacy, and surveillance in their jurisdiction. The developers expressly disclaim any responsibility for misuse of this software for illegal or unethical purposes, including but not limited to non-consensual monitoring or invasion of privacy.
 
-## Support
-
-- 📖 [Documentation](docs/)
-- 🐛 [Issue Tracker](https://github.com/Yeti47/cryospy/issues)
-- 💬 [Discussions](https://github.com/Yeti47/cryospy/discussions)
-
 ---
 
 <div align="center">
