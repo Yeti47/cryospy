@@ -3,6 +3,7 @@ package videos
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/encryption"
@@ -27,6 +28,8 @@ type ClipReader interface {
 	GetClipInfoByID(clipID string) (*ClipInfo, error)
 	// GetClipThumbnail retrieves the thumbnail for a clip by ID with decrypted data
 	GetClipThumbnail(clipID string, mekStore encryption.MekStore) (*Thumbnail, error)
+	// GetClipInfosByReferenceTime retrieves clip infos based on a reference time
+	GetClipInfosByReferenceTime(clientID string, referenceTime time.Time, limit int) ([]*ClipInfo, error)
 }
 
 type clipReader struct {
@@ -218,4 +221,47 @@ func (r *clipReader) GetClipThumbnail(clipID string, mekStore encryption.MekStor
 		Data:     thumbnailData,
 		MimeType: thumb.MimeType,
 	}, nil
+}
+
+func (r *clipReader) GetClipInfosByReferenceTime(clientID string, referenceTime time.Time, limit int) ([]*ClipInfo, error) {
+	// Get the latest clip where the timestamp is less than or equal to the reference time
+	// and the clips where the timestamp is greater than or equal to the reference time, but
+	// limit the results to the specified count. The minimum limit is 1 because the "before" clip is always included.
+
+	if limit < 1 {
+		limit = 1 // Ensure at least one clip is returned
+	}
+
+	beforeQuery := ClipQuery{
+		ClientID: clientID,
+		EndTime:  &referenceTime,
+		Page:     1,
+		PageSize: 1,
+	}
+	beforeClips, _, err := r.clipRepo.QueryInfo(context.Background(), beforeQuery)
+	if err != nil {
+		r.logger.Error("Failed to query clips before reference time", err)
+		return nil, err
+	}
+
+	afterQuery := ClipQuery{
+		ClientID:  clientID,
+		StartTime: &referenceTime,
+		Page:      1,
+		PageSize:  limit - 1, // Limit to one less since we already have the "before" clip
+	}
+	afterClips, _, err := r.clipRepo.QueryInfo(context.Background(), afterQuery)
+	if err != nil {
+		r.logger.Error("Failed to query clips after reference time", err)
+		return nil, err
+	}
+
+	// Combine the before clip with the after clips
+	clips := make([]*ClipInfo, 0, len(beforeClips)+len(afterClips))
+	if len(beforeClips) > 0 {
+		clips = append(clips, beforeClips[0]) // Add the "before" clip
+	}
+	clips = append(clips, afterClips...)
+
+	return clips, nil
 }

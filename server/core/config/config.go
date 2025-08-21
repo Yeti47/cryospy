@@ -18,6 +18,7 @@ type Config struct {
 	StorageNotificationSettings *StorageNotificationSettings `json:"storage_notification_settings,omitempty"`
 	MotionNotificationSettings  *MotionNotificationSettings  `json:"motion_notification_settings,omitempty"`
 	SMTPSettings                *SMTPSettings                `json:"smtp_settings,omitempty"`
+	StreamingSettings           *StreamingSettings           `json:"streaming_settings,omitempty"`
 }
 
 // StorageNotificationSettings holds the configuration for storage notifications
@@ -42,6 +43,32 @@ type SMTPSettings struct {
 	FromAddr string `json:"from_addr"`
 }
 
+// StreamingSettings contains configuration for the streaming service
+type StreamingSettings struct {
+	// Cache configuration
+	Cache     StreamingCacheSettings `json:"cache"`
+	LookAhead int                    `json:"look_ahead"` // Number of clips to look ahead for streaming
+}
+
+// StreamingCacheSettings contains configuration for the normalized clip cache
+type StreamingCacheSettings struct {
+	// Enabled indicates whether caching is enabled
+	Enabled bool `json:"enabled"`
+	// MaxSizeBytes is the maximum cache size in bytes
+	MaxSizeBytes int64 `json:"max_size_bytes"`
+}
+
+// DefaultStreamingSettings returns default configuration for the streaming service
+func DefaultStreamingSettings() StreamingSettings {
+	return StreamingSettings{
+		Cache: StreamingCacheSettings{
+			Enabled:      true,
+			MaxSizeBytes: 100 * 1024 * 1024, // 100MB default
+		},
+		LookAhead: 10, // Default to 10 clips lookahead
+	}
+}
+
 // DefaultConfig returns a new Config with default values
 func DefaultConfig() *Config {
 
@@ -57,13 +84,16 @@ func DefaultConfig() *Config {
 		}
 	}
 
+	defaultStreamingSettings := DefaultStreamingSettings()
+
 	return &Config{
-		WebAddr:      "127.0.0.1",
-		WebPort:      8080,
-		CapturePort:  8081,
-		DatabasePath: filepath.Join(dbDir, "cryospy.db"),
-		LogPath:      filepath.Join(dbDir, "logs"),
-		LogLevel:     "info",
+		WebAddr:           "127.0.0.1",
+		WebPort:           8080,
+		CapturePort:       8081,
+		DatabasePath:      filepath.Join(dbDir, "cryospy.db"),
+		LogPath:           filepath.Join(dbDir, "logs"),
+		LogLevel:          "info",
+		StreamingSettings: &defaultStreamingSettings,
 	}
 }
 
