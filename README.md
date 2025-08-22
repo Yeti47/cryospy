@@ -26,7 +26,7 @@ CryoSpy is a privacy-focused surveillance system developed for secure self-hosti
 - **🎯 Motion Detection**: Intelligent motion detection with configurable sensitivity
 - **📱 Web Dashboard**: Modern web interface for monitoring and management
 - **🎬 Live Streaming**: HLS-based live video streaming with low latency
-- **📧 Smart Notifications**: Email alerts for motion detection and storage warnings
+- **📧 Smart Notifications**: Email alerts for motion detection, storage warnings, and security events
 - **🔄 Automatic Settings Sync**: Centralized configuration management
 - **📊 Storage Management**: Automatic cleanup with configurable storage limits
 - **🛡️ Client Authentication**: Secure client-server communication with encryption keys
@@ -51,6 +51,7 @@ The core backend service that handles video ingestion:
 - Video metadata extraction and thumbnail generation
 - Encrypted storage management with automatic cleanup
 - Email notifications for motion detection and storage alerts
+- Authentication failure monitoring with configurable thresholds
 
 ### 🖥️ Dashboard
 A web-based administration interface designed for local access on the host system:
@@ -183,6 +184,12 @@ The server uses a JSON configuration file. By default, it's located at `~/cryosp
     "recipient": "admin@example.com",
     "min_interval_minutes": 15
   },
+  "auth_notification_settings": {
+    "recipient": "admin@example.com",
+    "min_interval_minutes": 30,
+    "failure_threshold": 5,
+    "time_window_minutes": 60
+  },
   "smtp_settings": {
     "host": "smtp.gmail.com",
     "port": 587,
@@ -298,6 +305,7 @@ CryoSpy can send intelligent email notifications for:
 
 - **Motion Detection**: Instant alerts when motion is detected by any camera
 - **Storage Warnings**: Notifications when storage usage exceeds thresholds
+- **Authentication Failures**: Security alerts when repeated authentication failures are detected
 
 Configure SMTP settings in the server configuration to enable notifications.
 

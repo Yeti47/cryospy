@@ -76,6 +76,7 @@ func main() {
 	// Initialize notifiers based on configuration
 	var storageNotifier notifications.StorageNotifier
 	var motionNotifier notifications.MotionNotifier
+	var authNotifier notifications.AuthNotifier
 
 	// Initialize email sender if SMTP is configured
 	var emailSender notifications.EmailSender
@@ -112,6 +113,20 @@ func main() {
 		logger.Info("Motion notifications enabled", "recipient", cfg.MotionNotificationSettings.Recipient)
 	}
 
+	// Initialize auth notifier if configured
+	if cfg.AuthNotificationSettings != nil && emailSender != notifications.NopSender {
+		authNotifierSettings := notifications.AuthNotificationSettings{
+			Recipient:        cfg.AuthNotificationSettings.Recipient,
+			MinInterval:      time.Duration(cfg.AuthNotificationSettings.MinIntervalMinutes) * time.Minute,
+			FailureThreshold: cfg.AuthNotificationSettings.FailureThreshold,
+			TimeWindow:       time.Duration(cfg.AuthNotificationSettings.TimeWindowMinutes) * time.Minute,
+		}
+		authNotifier = notifications.NewEmailAuthNotifier(authNotifierSettings, emailSender, logger)
+		logger.Info("Authentication failure notifications enabled", "recipient", cfg.AuthNotificationSettings.Recipient, "threshold", cfg.AuthNotificationSettings.FailureThreshold)
+	} else {
+		authNotifier = notifications.NopAuthNotifier
+	}
+
 	storageManager := videos.NewStorageManager(logger, clipRepo, clientRepo, storageNotifier, motionNotifier)
 	clipCreator := videos.NewClipCreator(
 		logger,
@@ -123,7 +138,7 @@ func main() {
 	)
 
 	// Initialize handlers and middleware
-	authMiddleware := middleware.NewAuthMiddleware(logger, clientVerifier)
+	authMiddleware := middleware.NewAuthMiddleware(logger, clientVerifier, authNotifier)
 	clipHandler := handlers.NewClipHandler(logger, clipCreator)
 	clientHandler := handlers.NewClientHandler(logger, clientService)
 

@@ -14,6 +14,12 @@
     "recipient": "admin@example.com",
     "min_interval_minutes": 15
   },
+  "auth_notification_settings": {
+    "recipient": "admin@example.com",
+    "min_interval_minutes": 30,
+    "failure_threshold": 5,
+    "time_window_minutes": 60
+  },
   "smtp_settings": {
     "host": "smtp.gmail.com",
     "port": 587,

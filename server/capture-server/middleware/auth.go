@@ -3,27 +3,35 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/clients"
+	"github.com/yeti47/cryospy/server/core/notifications"
 )
 
 // AuthMiddleware provides client authentication middleware for Gin
 type AuthMiddleware struct {
-	logger   logging.Logger
-	verifier clients.ClientVerifier
+	logger       logging.Logger
+	verifier     clients.ClientVerifier
+	authNotifier notifications.AuthNotifier
 }
 
 // NewAuthMiddleware creates a new authentication middleware
-func NewAuthMiddleware(logger logging.Logger, verifier clients.ClientVerifier) *AuthMiddleware {
+func NewAuthMiddleware(logger logging.Logger, verifier clients.ClientVerifier, authNotifier notifications.AuthNotifier) *AuthMiddleware {
 	if logger == nil {
 		logger = logging.NopLogger
 	}
 
+	if authNotifier == nil {
+		authNotifier = notifications.NopAuthNotifier
+	}
+
 	return &AuthMiddleware{
-		logger:   logger,
-		verifier: verifier,
+		logger:       logger,
+		verifier:     verifier,
+		authNotifier: authNotifier,
 	}
 }
 
@@ -63,6 +71,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			// Check if it's a client verification error (authentication failure)
 			if clients.IsClientVerificationError(err) {
 				m.logger.Warn("Client verification failed", "clientID", clientID)
+				m.handleAuthFailure(clientID, c)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 				c.Abort()
 				return
@@ -76,6 +85,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 
 		if !valid {
 			m.logger.Warn("Invalid client credentials", "clientID", clientID)
+			m.handleAuthFailure(clientID, c)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 			c.Abort()
 			return
@@ -87,5 +97,25 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		c.Set("clientSecret", clientSecret)
 
 		c.Next()
+	}
+}
+
+// handleAuthFailure records an authentication failure and sends notification if threshold is exceeded
+func (m *AuthMiddleware) handleAuthFailure(clientID string, c *gin.Context) {
+	clientIP := c.ClientIP()
+	now := time.Now()
+
+	// Record the authentication failure
+	failureCount := m.authNotifier.RecordAuthFailure(clientID, clientIP, now)
+
+	// Check if we should notify about repeated failures
+	if m.authNotifier.ShouldNotify(failureCount) {
+		// We don't block on notification sending - do it in a goroutine
+		go func() {
+			err := m.authNotifier.NotifyRepeatedAuthFailure(clientID, failureCount, clientIP)
+			if err != nil {
+				m.logger.Error("Failed to send authentication failure notification", "error", err, "clientID", clientID)
+			}
+		}()
 	}
 }
