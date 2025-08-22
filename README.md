@@ -68,6 +68,7 @@ A web-based administration interface designed for local access on the host syste
 - **Secure Authentication**: Basic authentication with encrypted client secrets
 - **Data Encryption**: All video data encrypted at rest using AES-GCM with the global MEK
 - **Session Management**: Secure web sessions for dashboard access
+- **Proxy Security**: Configurable trusted proxy settings for production deployments
 - **HTTPS Ready**: Designed to work with reverse proxies for HTTPS termination
 
 > **Note**: In CryoSpy, a "client" refers to a capture device (end device running the capture-client application), not a user or browser session.
@@ -92,12 +93,12 @@ A web-based administration interface designed for local access on the host syste
 
 2. **Build all components:**
    ```bash
-   # Build capture server
+   # Build capture server (debug mode)
    cd server/capture-server
    go mod tidy
    go build -o capture-server .
    
-   # Build dashboard
+   # Build dashboard (debug mode)
    cd ../dashboard
    go mod tidy
    go build -o dashboard .
@@ -106,6 +107,13 @@ A web-based administration interface designed for local access on the host syste
    cd ../../client/capture-client
    go mod tidy
    go build -o capture-client .
+   ```
+
+   **For production deployments**, use release builds which optimize Gin for production:
+   ```bash
+   # Build with release tags for production
+   go build -tags release -o capture-server .
+   go build -tags release -o dashboard .
    ```
 
 3. **Configure the server:**
@@ -162,6 +170,10 @@ The server uses a JSON configuration file. By default, it's located at `~/cryosp
   "database_path": "/path/to/cryospy.db",
   "log_path": "/path/to/logs",
   "log_level": "info",
+  "trusted_proxies": {
+    "capture_server": ["192.168.1.10", "nginx-ip"],
+    "dashboard": []
+  },
   "storage_notification_settings": {
     "recipient": "admin@example.com",
     "min_interval_minutes": 60,
@@ -192,6 +204,53 @@ The server uses a JSON configuration file. By default, it's located at `~/cryosp
   }
 }
 ```
+
+#### Trusted Proxies Configuration
+
+The `trusted_proxies` configuration is important for production deployments behind reverse proxies or load balancers. This setting controls which proxy IP addresses are trusted to provide real client IP information through headers like `X-Forwarded-For`.
+
+```json
+{
+  "trusted_proxies": {
+    "capture_server": ["192.168.1.10", "10.0.0.5"],
+    "dashboard": []
+  }
+}
+```
+
+**Configuration Guidelines:**
+- **Capture Server**: Usually needs proxy configuration when deployed behind nginx/Apache for internet access
+- **Dashboard**: Often accessed locally, so empty array `[]` is most secure
+- **Development Builds**: Trust all proxies by default (no restrictions)
+- **Production Builds**: Only trust explicitly configured proxy IPs
+
+**Common Deployment Scenarios:**
+
+1. **Capture server behind nginx, dashboard local-only:**
+   ```json
+   "trusted_proxies": {
+     "capture_server": ["192.168.1.10"],  // nginx server IP
+     "dashboard": []                       // no proxies (most secure)
+   }
+   ```
+
+2. **Both services behind load balancer:**
+   ```json
+   "trusted_proxies": {
+     "capture_server": ["10.0.0.5"],     // load balancer IP
+     "dashboard": ["10.0.0.5"]           // same load balancer
+   }
+   ```
+
+3. **Direct internet access (no proxies):**
+   ```json
+   "trusted_proxies": {
+     "capture_server": [],               // don't trust any proxy headers
+     "dashboard": []                     // don't trust any proxy headers
+   }
+   ```
+
+> **Security Note**: Incorrectly configured trusted proxies can allow IP spoofing. Only add proxy IPs that you control and trust.
 
 ### Client Configuration
 Each capture client uses a local JSON configuration file:
@@ -263,15 +322,30 @@ cryospy/
 # Build all components with available VS Code tasks
 # Or build manually:
 
-# Capture Server
+# Development builds (debug mode)
 cd server/capture-server && go build -o capture-server .
-
-# Dashboard
 cd server/dashboard && go build -o dashboard .
-
-# Capture Client
 cd client/capture-client && go build -o capture-client .
+
+# Production builds (release mode)
+cd server/capture-server && go build -tags release -o capture-server .
+cd server/dashboard && go build -tags release -o dashboard .
+# Note: capture-client doesn't use build tags
 ```
+
+#### Build Modes
+
+**Debug Mode (Development):**
+- Default build without tags
+- Gin runs in debug mode with verbose logging
+- Trusts all proxy headers (permissive for development)
+- Includes all debugging middleware
+
+**Release Mode (Production):**
+- Built with `-tags release`
+- Gin runs in release mode (optimized, minimal logging)
+- Only trusts explicitly configured proxy IPs from config
+- Minimal middleware for better performance
 
 ### Running Tests
 ```bash
