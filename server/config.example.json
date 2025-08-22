@@ -14,11 +14,12 @@
     "recipient": "admin@example.com",
     "min_interval_minutes": 15
   },
-  "auth_notification_settings": {
-    "recipient": "admin@example.com",
-    "min_interval_minutes": 30,
-    "failure_threshold": 5,
-    "time_window_minutes": 60
+  "auth_event_settings": {
+    "time_window_minutes": 60,
+    "auto_disable_threshold": 10,
+    "notification_recipient": "admin@example.com",
+    "notification_threshold": 5,
+    "min_interval_minutes": 30
   },
   "smtp_settings": {
     "host": "smtp.gmail.com",

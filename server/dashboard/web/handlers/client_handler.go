@@ -350,3 +350,35 @@ func (h *ClientHandler) DeleteClient(c *gin.Context) {
 
 	c.Redirect(http.StatusFound, "/clients")
 }
+
+func (h *ClientHandler) DisableClient(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := h.clientService.DisableClient(id); err != nil {
+		h.logger.Error("Failed to disable client", err)
+		c.HTML(http.StatusInternalServerError, "clients", gin.H{
+			"Title": "Clients",
+			"Error": "Failed to disable client.",
+		})
+		return
+	}
+
+	h.logger.Info("Client disabled", "clientId", id)
+	c.Redirect(http.StatusFound, "/clients")
+}
+
+func (h *ClientHandler) EnableClient(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := h.clientService.EnableClient(id); err != nil {
+		h.logger.Error("Failed to enable client", err)
+		c.HTML(http.StatusInternalServerError, "clients", gin.H{
+			"Title": "Clients",
+			"Error": "Failed to enable client.",
+		})
+		return
+	}
+
+	h.logger.Info("Client enabled", "clientId", id)
+	c.Redirect(http.StatusFound, "/clients")
+}

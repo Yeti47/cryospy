@@ -7,45 +7,11 @@ import (
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 )
 
-func TestEmailAuthNotifier_RecordAuthFailure(t *testing.T) {
-	settings := AuthNotificationSettings{
-		Recipient:        "admin@example.com",
-		MinInterval:      5 * time.Minute,
-		FailureThreshold: 3,
-		TimeWindow:       time.Hour,
-	}
-
-	mockSender := &mockEmailSender{}
-	logger := logging.NopLogger
-	notifier := NewEmailAuthNotifier(settings, mockSender, logger)
-
-	clientID := "test-client"
-	clientIP := "192.168.1.100"
-	now := time.Now()
-
-	// Test recording multiple failures
-	count1 := notifier.RecordAuthFailure(clientID, clientIP, now)
-	if count1 != 1 {
-		t.Errorf("Expected failure count 1, got %d", count1)
-	}
-
-	count2 := notifier.RecordAuthFailure(clientID, clientIP, now.Add(1*time.Minute))
-	if count2 != 2 {
-		t.Errorf("Expected failure count 2, got %d", count2)
-	}
-
-	count3 := notifier.RecordAuthFailure(clientID, clientIP, now.Add(2*time.Minute))
-	if count3 != 3 {
-		t.Errorf("Expected failure count 3, got %d", count3)
-	}
-}
-
 func TestEmailAuthNotifier_ShouldNotify(t *testing.T) {
 	settings := AuthNotificationSettings{
 		Recipient:        "admin@example.com",
 		MinInterval:      5 * time.Minute,
 		FailureThreshold: 3,
-		TimeWindow:       time.Hour,
 	}
 
 	mockSender := &mockEmailSender{}
@@ -73,7 +39,6 @@ func TestEmailAuthNotifier_NotifyRepeatedAuthFailure(t *testing.T) {
 		Recipient:        "admin@example.com",
 		MinInterval:      5 * time.Minute,
 		FailureThreshold: 3,
-		TimeWindow:       time.Hour,
 	}
 
 	mockSender := &mockEmailSender{}
@@ -104,7 +69,7 @@ func TestEmailAuthNotifier_NotifyRepeatedAuthFailure(t *testing.T) {
 		t.Errorf("Unexpected email subject: %s", email.subject)
 	}
 
-	// Second notification within min interval should be skipped
+	// Second notification within min interval should be skipped due to rate limiting
 	err = notifier.NotifyRepeatedAuthFailure(clientID, failureCount, clientIP)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -118,12 +83,7 @@ func TestEmailAuthNotifier_NotifyRepeatedAuthFailure(t *testing.T) {
 func TestNopAuthNotifier(t *testing.T) {
 	notifier := NopAuthNotifier
 
-	// All methods should return zero/false/nil
-	count := notifier.RecordAuthFailure("client", "ip", time.Now())
-	if count != 0 {
-		t.Errorf("Expected 0 failure count, got %d", count)
-	}
-
+	// All methods should return false/nil
 	if notifier.ShouldNotify(10) {
 		t.Error("Nop notifier should never notify")
 	}

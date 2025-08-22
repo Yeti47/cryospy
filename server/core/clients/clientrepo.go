@@ -49,6 +49,7 @@ func (r *SQLiteClientRepository) createTables() error {
 		encrypted_mek TEXT NOT NULL,
 		key_derivation_salt TEXT NOT NULL,
 		storage_limit_megabytes INTEGER NOT NULL,
+		is_disabled INTEGER NOT NULL DEFAULT 0,
 		clip_duration_seconds INTEGER NOT NULL DEFAULT 60,
 		motion_only INTEGER NOT NULL DEFAULT 0,
 		grayscale INTEGER NOT NULL DEFAULT 0,
@@ -69,6 +70,7 @@ func (r *SQLiteClientRepository) createTables() error {
 	}
 
 	// Add new columns if they don't exist, to support migration from older versions
+	db.AddColumn(r.db, "clients", "is_disabled", "INTEGER NOT NULL DEFAULT 0")
 	db.AddColumn(r.db, "clients", "clip_duration_seconds", "INTEGER NOT NULL DEFAULT 60")
 	db.AddColumn(r.db, "clients", "motion_only", "INTEGER NOT NULL DEFAULT 0")
 	db.AddColumn(r.db, "clients", "grayscale", "INTEGER NOT NULL DEFAULT 0")
@@ -89,7 +91,7 @@ func (r *SQLiteClientRepository) createTables() error {
 func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Client, error) {
 	query := `
 	SELECT id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes,
-		clip_duration_seconds, motion_only, grayscale, downscale_resolution,
+		is_disabled, clip_duration_seconds, motion_only, grayscale, downscale_resolution,
 		output_format, output_codec, video_bitrate,
 		motion_min_area, motion_max_frames, motion_warm_up_frames,
 		capture_codec, capture_frame_rate
@@ -102,7 +104,7 @@ func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Clien
 	err := row.Scan(
 		&client.ID, &client.SecretHash, &client.SecretSalt, &createdAtStr, &updatedAtStr,
 		&client.EncryptedMek, &client.KeyDerivationSalt, &client.StorageLimitMegabytes,
-		&client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
+		&client.IsDisabled, &client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
 		&client.OutputFormat, &client.OutputCodec, &client.VideoBitRate,
 		&client.MotionMinArea, &client.MotionMaxFrames, &client.MotionWarmUpFrames,
 		&client.CaptureCodec, &client.CaptureFrameRate,
@@ -132,7 +134,7 @@ func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Clien
 func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) {
 	query := `
 	SELECT id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes,
-		clip_duration_seconds, motion_only, grayscale, downscale_resolution,
+		is_disabled, clip_duration_seconds, motion_only, grayscale, downscale_resolution,
 		output_format, output_codec, video_bitrate,
 		motion_min_area, motion_max_frames, motion_warm_up_frames,
 		capture_codec, capture_frame_rate
@@ -151,7 +153,7 @@ func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) 
 		err := rows.Scan(
 			&client.ID, &client.SecretHash, &client.SecretSalt, &createdAtStr, &updatedAtStr,
 			&client.EncryptedMek, &client.KeyDerivationSalt, &client.StorageLimitMegabytes,
-			&client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
+			&client.IsDisabled, &client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
 			&client.OutputFormat, &client.OutputCodec, &client.VideoBitRate,
 			&client.MotionMinArea, &client.MotionMaxFrames, &client.MotionWarmUpFrames,
 			&client.CaptureCodec, &client.CaptureFrameRate,
@@ -181,17 +183,17 @@ func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) 
 func (r *SQLiteClientRepository) Create(ctx context.Context, client *Client) error {
 	query := `
 	INSERT INTO clients (id, secret_hash, secret_salt, created_at, updated_at, encrypted_mek, key_derivation_salt, storage_limit_megabytes,
-		clip_duration_seconds, motion_only, grayscale, downscale_resolution,
+		is_disabled, clip_duration_seconds, motion_only, grayscale, downscale_resolution,
 		output_format, output_codec, video_bitrate,
 		motion_min_area, motion_max_frames, motion_warm_up_frames,
 		capture_codec, capture_frame_rate)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.ExecContext(ctx, query,
 		client.ID, client.SecretHash, client.SecretSalt,
 		db.TimeToString(client.CreatedAt), db.TimeToString(client.UpdatedAt),
 		client.EncryptedMek, client.KeyDerivationSalt, client.StorageLimitMegabytes,
-		client.ClipDurationSeconds, client.MotionOnly, client.Grayscale, client.DownscaleResolution,
+		client.IsDisabled, client.ClipDurationSeconds, client.MotionOnly, client.Grayscale, client.DownscaleResolution,
 		client.OutputFormat, client.OutputCodec, client.VideoBitRate,
 		client.MotionMinArea, client.MotionMaxFrames, client.MotionWarmUpFrames,
 		client.CaptureCodec, client.CaptureFrameRate,
@@ -208,7 +210,7 @@ func (r *SQLiteClientRepository) Update(ctx context.Context, client *Client) err
 	query := `
 	UPDATE clients 
 	SET secret_hash = ?, secret_salt = ?, updated_at = ?, encrypted_mek = ?, 
-		key_derivation_salt = ?, storage_limit_megabytes = ?,
+		key_derivation_salt = ?, storage_limit_megabytes = ?, is_disabled = ?,
 		clip_duration_seconds = ?, motion_only = ?, grayscale = ?, downscale_resolution = ?,
 		output_format = ?, output_codec = ?, video_bitrate = ?,
 		motion_min_area = ?, motion_max_frames = ?, motion_warm_up_frames = ?,
@@ -217,7 +219,7 @@ func (r *SQLiteClientRepository) Update(ctx context.Context, client *Client) err
 
 	result, err := r.db.ExecContext(ctx, query,
 		client.SecretHash, client.SecretSalt, db.TimeToString(client.UpdatedAt),
-		client.EncryptedMek, client.KeyDerivationSalt, client.StorageLimitMegabytes,
+		client.EncryptedMek, client.KeyDerivationSalt, client.StorageLimitMegabytes, client.IsDisabled,
 		client.ClipDurationSeconds, client.MotionOnly, client.Grayscale, client.DownscaleResolution,
 		client.OutputFormat, client.OutputCodec, client.VideoBitRate,
 		client.MotionMinArea, client.MotionMaxFrames, client.MotionWarmUpFrames,

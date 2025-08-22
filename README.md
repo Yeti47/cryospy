@@ -184,11 +184,12 @@ The server uses a JSON configuration file. By default, it's located at `~/cryosp
     "recipient": "admin@example.com",
     "min_interval_minutes": 15
   },
-  "auth_notification_settings": {
-    "recipient": "admin@example.com",
-    "min_interval_minutes": 30,
-    "failure_threshold": 5,
-    "time_window_minutes": 60
+  "auth_event_settings": {
+    "time_window_minutes": 60,
+    "auto_disable_threshold": 10,
+    "notification_recipient": "admin@example.com",
+    "notification_threshold": 5,
+    "min_interval_minutes": 30
   },
   "smtp_settings": {
     "host": "smtp.gmail.com",
@@ -308,6 +309,73 @@ CryoSpy can send intelligent email notifications for:
 - **Authentication Failures**: Security alerts when repeated authentication failures are detected
 
 Configure SMTP settings in the server configuration to enable notifications.
+
+## Client Management
+
+### Client Security Features
+
+CryoSpy includes several security features for managing camera clients:
+
+#### Client Disabling
+- Clients can be disabled without deleting them entirely
+- Disabled clients cannot authenticate and are treated as non-existent
+- Useful for temporarily suspending problematic clients
+- Can be managed through the dashboard interface
+
+#### Automatic Client Disabling
+When `auth_event_settings.auto_disable_threshold` is configured, clients will be automatically disabled after exceeding the specified number of authentication failures within the time window. This helps protect against brute force attacks and misconfigured clients.
+
+Example configuration:
+```json
+{
+  "auth_event_settings": {
+    "time_window_minutes": 60,
+    "auto_disable_threshold": 10,
+    "notification_recipient": "admin@example.com",
+    "notification_threshold": 5,
+    "min_interval_minutes": 30
+  }
+}
+```
+
+Set `auto_disable_threshold` to `0` to disable this feature.
+
+#### Authentication Event Configuration
+All authentication-related settings are unified under `auth_event_settings`:
+
+- `time_window_minutes`: Time window for counting authentication failures
+- `auto_disable_threshold`: Number of failures that trigger automatic client disabling (0 to disable)
+- `notification_recipient`: Email address for notifications (empty string to disable)
+- `notification_threshold`: Number of failures that trigger notifications (0 to disable)
+- `min_interval_minutes`: Minimum time between notifications for rate limiting
+
+**Configuration Examples:**
+
+**Notifications only** (no auto-disable):
+```json
+{
+  "auth_event_settings": {
+    "time_window_minutes": 60,
+    "auto_disable_threshold": 0,
+    "notification_recipient": "admin@example.com",
+    "notification_threshold": 5,
+    "min_interval_minutes": 30
+  }
+}
+```
+
+**Auto-disable only** (no notifications):
+```json
+{
+  "auth_event_settings": {
+    "time_window_minutes": 60,
+    "auto_disable_threshold": 10,
+    "notification_recipient": "",
+    "notification_threshold": 0,
+    "min_interval_minutes": 0
+  }
+}
+```
 
 ## Development
 

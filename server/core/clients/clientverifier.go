@@ -38,6 +38,11 @@ func (v *clientVerifier) VerifyClient(clientID, clientSecret string) (bool, *Cli
 		return false, nil, NewClientVerificationError(clientID) // don't specify the reason to avoid leaking information
 	}
 
+	// Check if the client is disabled
+	if client.IsDisabled {
+		return false, nil, NewClientVerificationError(clientID) // treat disabled clients as non-existent
+	}
+
 	// Verify the client secret
 	// First decode the client secret from hex (since it was sent as hex-encoded string)
 	decodedClientSecret, err := hex.DecodeString(clientSecret)

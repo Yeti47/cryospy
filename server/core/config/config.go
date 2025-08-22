@@ -18,7 +18,7 @@ type Config struct {
 	TrustedProxies              *TrustedProxySettings        `json:"trusted_proxies,omitempty"`
 	StorageNotificationSettings *StorageNotificationSettings `json:"storage_notification_settings,omitempty"`
 	MotionNotificationSettings  *MotionNotificationSettings  `json:"motion_notification_settings,omitempty"`
-	AuthNotificationSettings    *AuthNotificationSettings    `json:"auth_notification_settings,omitempty"`
+	AuthEventSettings           *AuthEventSettings           `json:"auth_event_settings,omitempty"`
 	SMTPSettings                *SMTPSettings                `json:"smtp_settings,omitempty"`
 	StreamingSettings           *StreamingSettings           `json:"streaming_settings,omitempty"`
 }
@@ -42,12 +42,13 @@ type MotionNotificationSettings struct {
 	MinIntervalMinutes int    `json:"min_interval_minutes"`
 }
 
-// AuthNotificationSettings holds the configuration for authentication failure notifications
-type AuthNotificationSettings struct {
-	Recipient          string `json:"recipient"`
-	MinIntervalMinutes int    `json:"min_interval_minutes"`
-	FailureThreshold   int    `json:"failure_threshold"`
-	TimeWindowMinutes  int    `json:"time_window_minutes"`
+// AuthEventSettings holds the configuration for authentication failure tracking and notifications
+type AuthEventSettings struct {
+	TimeWindowMinutes     int    `json:"time_window_minutes"`    // Time window for counting failures
+	AutoDisableThreshold  int    `json:"auto_disable_threshold"` // Number of failed attempts after which to auto-disable the client (0 to disable)
+	NotificationRecipient string `json:"notification_recipient"` // Email recipient for notifications (empty to disable notifications)
+	NotificationThreshold int    `json:"notification_threshold"` // Number of failures that trigger notification (0 to disable)
+	MinIntervalMinutes    int    `json:"min_interval_minutes"`   // Minimum interval between notifications for the same client
 }
 
 // SMTPSettings holds the configuration for SMTP email sending

@@ -63,6 +63,10 @@ type ClientService interface {
 	UpdateClientSettings(req UpdateClientSettingsRequest) error
 	// DeleteClient deletes a client by its ID
 	DeleteClient(id string) error
+	// DisableClient disables a client (soft delete)
+	DisableClient(id string) error
+	// EnableClient enables a disabled client
+	EnableClient(id string) error
 	// GetSupportedDownscaleResolutions returns a list of supported downscale resolutions
 	GetSupportedDownscaleResolutions() []string
 	// GetSupportedCaptureCodecs returns a list of supported capture codecs
@@ -355,5 +359,63 @@ func (s *clientService) DeleteClient(id string) error {
 	}
 
 	s.logger.Info("Successfully deleted client", "id", id)
+	return nil
+}
+
+func (s *clientService) DisableClient(id string) error {
+	s.logger.Info("Disabling client", "id", id)
+
+	ctx := context.Background()
+
+	// Check if the client exists
+	client, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Error("Failed to retrieve client", err)
+		return err
+	}
+	if client == nil {
+		s.logger.Info("Client not found", "id", id)
+		return nil // No error if the client does not exist
+	}
+
+	// Update the client to disable it
+	client.IsDisabled = true
+	client.UpdatedAt = time.Now().UTC()
+
+	if err := s.repo.Update(ctx, client); err != nil {
+		s.logger.Error("Failed to disable client", err)
+		return err
+	}
+
+	s.logger.Info("Successfully disabled client", "id", id)
+	return nil
+}
+
+func (s *clientService) EnableClient(id string) error {
+	s.logger.Info("Enabling client", "id", id)
+
+	ctx := context.Background()
+
+	// Check if the client exists
+	client, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Error("Failed to retrieve client", err)
+		return err
+	}
+	if client == nil {
+		s.logger.Info("Client not found", "id", id)
+		return nil // No error if the client does not exist
+	}
+
+	// Update the client to enable it
+	client.IsDisabled = false
+	client.UpdatedAt = time.Now().UTC()
+
+	if err := s.repo.Update(ctx, client); err != nil {
+		s.logger.Error("Failed to enable client", err)
+		return err
+	}
+
+	s.logger.Info("Successfully enabled client", "id", id)
 	return nil
 }

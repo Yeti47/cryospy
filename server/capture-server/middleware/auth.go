@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yeti47/cryospy/server/core/ccc/auth"
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/clients"
 	"github.com/yeti47/cryospy/server/core/notifications"
@@ -13,13 +14,15 @@ import (
 
 // AuthMiddleware provides client authentication middleware for Gin
 type AuthMiddleware struct {
-	logger       logging.Logger
-	verifier     clients.ClientVerifier
-	authNotifier notifications.AuthNotifier
+	logger         logging.Logger
+	verifier       clients.ClientVerifier
+	authNotifier   notifications.AuthNotifier
+	clientService  clients.ClientService
+	failureTracker auth.FailureTracker
 }
 
 // NewAuthMiddleware creates a new authentication middleware
-func NewAuthMiddleware(logger logging.Logger, verifier clients.ClientVerifier, authNotifier notifications.AuthNotifier) *AuthMiddleware {
+func NewAuthMiddleware(logger logging.Logger, verifier clients.ClientVerifier, authNotifier notifications.AuthNotifier, clientService clients.ClientService, failureTracker auth.FailureTracker) *AuthMiddleware {
 	if logger == nil {
 		logger = logging.NopLogger
 	}
@@ -28,10 +31,16 @@ func NewAuthMiddleware(logger logging.Logger, verifier clients.ClientVerifier, a
 		authNotifier = notifications.NopAuthNotifier
 	}
 
+	if failureTracker == nil {
+		failureTracker = auth.NopFailureTracker
+	}
+
 	return &AuthMiddleware{
-		logger:       logger,
-		verifier:     verifier,
-		authNotifier: authNotifier,
+		logger:         logger,
+		verifier:       verifier,
+		authNotifier:   authNotifier,
+		clientService:  clientService,
+		failureTracker: failureTracker,
 	}
 }
 
@@ -101,21 +110,24 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 }
 
 // handleAuthFailure records an authentication failure and sends notification if threshold is exceeded
-func (m *AuthMiddleware) handleAuthFailure(clientID string, c *gin.Context) {
+func (am *AuthMiddleware) handleAuthFailure(clientID string, c *gin.Context) {
+	// Get client IP
 	clientIP := c.ClientIP()
-	now := time.Now()
 
-	// Record the authentication failure
-	failureCount := m.authNotifier.RecordAuthFailure(clientID, clientIP, now)
+	// Record the failure and get current count
+	failureCount := am.failureTracker.RecordFailure(clientID, clientIP, time.Now())
 
-	// Check if we should notify about repeated failures
-	if m.authNotifier.ShouldNotify(failureCount) {
-		// We don't block on notification sending - do it in a goroutine
-		go func() {
-			err := m.authNotifier.NotifyRepeatedAuthFailure(clientID, failureCount, clientIP)
-			if err != nil {
-				m.logger.Error("Failed to send authentication failure notification", "error", err, "clientID", clientID)
-			}
-		}()
+	// Check if we should notify
+	if am.authNotifier.ShouldNotify(failureCount) {
+		go am.authNotifier.NotifyRepeatedAuthFailure(clientID, failureCount, clientIP)
+	}
+
+	// Check if client should be auto-disabled
+	if am.failureTracker.ShouldAutoDisable(failureCount) {
+		am.logger.Warn("Auto-disabling client due to repeated authentication failures", "clientId", clientID)
+		err := am.clientService.DisableClient(clientID)
+		if err != nil {
+			am.logger.Error("Failed to auto-disable client", "clientId", clientID, "error", err)
+		}
 	}
 }

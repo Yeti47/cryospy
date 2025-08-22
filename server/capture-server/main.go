@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/yeti47/cryospy/server/capture-server/handlers"
 	"github.com/yeti47/cryospy/server/capture-server/middleware"
+	"github.com/yeti47/cryospy/server/core/ccc/auth"
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
 	"github.com/yeti47/cryospy/server/core/clients"
 	"github.com/yeti47/cryospy/server/core/config"
@@ -76,7 +77,6 @@ func main() {
 	// Initialize notifiers based on configuration
 	var storageNotifier notifications.StorageNotifier
 	var motionNotifier notifications.MotionNotifier
-	var authNotifier notifications.AuthNotifier
 
 	// Initialize email sender if SMTP is configured
 	var emailSender notifications.EmailSender
@@ -113,18 +113,41 @@ func main() {
 		logger.Info("Motion notifications enabled", "recipient", cfg.MotionNotificationSettings.Recipient)
 	}
 
-	// Initialize auth notifier if configured
-	if cfg.AuthNotificationSettings != nil && emailSender != notifications.NopSender {
-		authNotifierSettings := notifications.AuthNotificationSettings{
-			Recipient:        cfg.AuthNotificationSettings.Recipient,
-			MinInterval:      time.Duration(cfg.AuthNotificationSettings.MinIntervalMinutes) * time.Minute,
-			FailureThreshold: cfg.AuthNotificationSettings.FailureThreshold,
-			TimeWindow:       time.Duration(cfg.AuthNotificationSettings.TimeWindowMinutes) * time.Minute,
+	// Initialize auth notifier and failure tracker from unified auth event settings
+	var authNotifier notifications.AuthNotifier
+	var failureTracker auth.FailureTracker
+
+	if cfg.AuthEventSettings != nil {
+		// Create failure tracker settings
+		autoDisableSettings := auth.AutoDisableSettings{
+			Threshold:  cfg.AuthEventSettings.AutoDisableThreshold, // 0 means no auto-disable
+			TimeWindow: time.Duration(cfg.AuthEventSettings.TimeWindowMinutes) * time.Minute,
 		}
-		authNotifier = notifications.NewEmailAuthNotifier(authNotifierSettings, emailSender, logger)
-		logger.Info("Authentication failure notifications enabled", "recipient", cfg.AuthNotificationSettings.Recipient, "threshold", cfg.AuthNotificationSettings.FailureThreshold)
+		failureTracker = auth.NewMemoryFailureTracker(autoDisableSettings)
+
+		// Log what features are enabled
+		if cfg.AuthEventSettings.AutoDisableThreshold > 0 {
+			logger.Info("Authentication auto-disable enabled", "threshold", cfg.AuthEventSettings.AutoDisableThreshold, "timeWindow", autoDisableSettings.TimeWindow)
+		}
+
+		// Initialize auth notifier if notifications are configured
+		if cfg.AuthEventSettings.NotificationRecipient != "" && cfg.AuthEventSettings.NotificationThreshold > 0 && emailSender != notifications.NopSender {
+			authNotifierSettings := notifications.AuthNotificationSettings{
+				Recipient:        cfg.AuthEventSettings.NotificationRecipient,
+				MinInterval:      time.Duration(cfg.AuthEventSettings.MinIntervalMinutes) * time.Minute,
+				FailureThreshold: cfg.AuthEventSettings.NotificationThreshold,
+			}
+			authNotifier = notifications.NewEmailAuthNotifier(authNotifierSettings, emailSender, logger)
+			logger.Info("Authentication failure notifications enabled", "recipient", cfg.AuthEventSettings.NotificationRecipient, "threshold", cfg.AuthEventSettings.NotificationThreshold)
+		} else {
+			authNotifier = notifications.NopAuthNotifier
+		}
+
+		logger.Info("Authentication failure tracking enabled", "timeWindow", autoDisableSettings.TimeWindow)
 	} else {
+		// No auth event settings configured
 		authNotifier = notifications.NopAuthNotifier
+		failureTracker = auth.NopFailureTracker
 	}
 
 	storageManager := videos.NewStorageManager(logger, clipRepo, clientRepo, storageNotifier, motionNotifier)
@@ -138,7 +161,7 @@ func main() {
 	)
 
 	// Initialize handlers and middleware
-	authMiddleware := middleware.NewAuthMiddleware(logger, clientVerifier, authNotifier)
+	authMiddleware := middleware.NewAuthMiddleware(logger, clientVerifier, authNotifier, clientService, failureTracker)
 	clipHandler := handlers.NewClipHandler(logger, clipCreator)
 	clientHandler := handlers.NewClientHandler(logger, clientService)
 

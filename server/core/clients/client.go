@@ -11,6 +11,7 @@ type Client struct {
 	EncryptedMek          string    // MEK encrypted with key derived from client secret (base 64 encoded)
 	KeyDerivationSalt     string    // Salt used for deriving encryption key from secret (base 64 encoded)
 	StorageLimitMegabytes int       // Storage limit in megabytes
+	IsDisabled            bool      // Flag indicating whether the client is disabled (soft delete)
 	ClipDurationSeconds   int       // The duration in seconds (integer) of each clip that the client captures
 	MotionOnly            bool      // A flag that describes whether the client should only upload video clips in which motion was detected
 	Grayscale             bool      // A flag that describes whether clips should be optimized to use grayscale to reduce size

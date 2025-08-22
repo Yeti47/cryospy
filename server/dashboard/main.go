@@ -163,6 +163,8 @@ func main() {
 			clientGroup.GET("/new", clientHandler.ShowNewClientForm)
 			clientGroup.POST("/new", clientHandler.CreateClient)
 			clientGroup.POST("/:id/settings", clientHandler.UpdateClientSettings)
+			clientGroup.POST("/:id/disable", clientHandler.DisableClient)
+			clientGroup.POST("/:id/enable", clientHandler.EnableClient)
 			clientGroup.POST("/:id/delete", clientHandler.DeleteClient)
 		}
 
