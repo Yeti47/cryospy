@@ -172,6 +172,7 @@ func main() {
 			clipGroup.GET("/:id", clipHandler.ViewClip)
 			clipGroup.GET("/:id/thumbnail", clipHandler.GetThumbnail)
 			clipGroup.GET("/:id/video", clipHandler.GetVideo)
+			clipGroup.GET("/:id/download", clipHandler.DownloadVideo)
 			clipGroup.POST("/delete", clipHandler.DeleteClips)
 		}
 

@@ -185,12 +185,51 @@ func (h *ClipHandler) GetVideo(c *gin.Context) {
 		return
 	}
 
-	h.logger.Debug("Serving video", "clipID", clipID, "mimeType", clip.VideoMimeType, "size", len(clip.Video))
+	h.logger.Debug("Serving video for streaming", "clipID", clipID, "mimeType", clip.VideoMimeType, "size", len(clip.Video))
 
-	// Set appropriate headers for video streaming
+	// Set headers optimized for video streaming/playback
 	c.Header("Accept-Ranges", "bytes")
 	c.Header("Content-Length", strconv.Itoa(len(clip.Video)))
+	c.Header("Content-Disposition", "inline")
+	c.Header("Cache-Control", "public, max-age=3600")
+
 	c.Data(http.StatusOK, clip.VideoMimeType, clip.Video)
+}
+
+func (h *ClipHandler) DownloadVideo(c *gin.Context) {
+	clipID := c.Param("id")
+	if clipID == "" {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	mekStore := h.mekStoreFactory(c)
+	clip, err := h.clipReader.GetClipByID(clipID, mekStore)
+	if err != nil {
+		h.logger.Error("Failed to get video for download", err, "clipID", clipID)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if clip == nil || len(clip.Video) == 0 {
+		h.logger.Warn("Video not found or empty for download", "clipID", clipID)
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	h.logger.Debug("Serving video download", "clipID", clipID, "mimeType", clip.VideoMimeType, "size", len(clip.Video))
+
+	// Set headers specifically for download
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Disposition", `attachment; filename="`+clip.Title+`"`)
+	c.Header("Content-Length", strconv.Itoa(len(clip.Video)))
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+
+	// Write the video data directly
+	c.Data(http.StatusOK, "application/octet-stream", clip.Video)
 }
 
 func (h *ClipHandler) DeleteClips(c *gin.Context) {
