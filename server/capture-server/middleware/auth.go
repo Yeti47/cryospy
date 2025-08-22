@@ -82,7 +82,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 				m.logger.Warn("Client verification failed", "clientID", clientID, "clientIP", c.ClientIP())
 				// Only track failures if we have a valid client (exists and enabled)
 				if client != nil {
-					m.handleAuthFailure(clientID, c)
+					m.recordAuthFailure(clientID, c)
 				}
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 				c.Abort()
@@ -99,7 +99,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			m.logger.Warn("Invalid client credentials", "clientID", clientID, "clientIP", c.ClientIP())
 			// Only track failures if we have a valid client (exists and enabled)
 			if client != nil {
-				m.handleAuthFailure(clientID, c)
+				m.recordAuthFailure(clientID, c)
 			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 			c.Abort()
@@ -115,8 +115,8 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 	}
 }
 
-// handleAuthFailure records an authentication failure and sends notification if threshold is exceeded
-func (am *AuthMiddleware) handleAuthFailure(clientID string, c *gin.Context) {
+// recordAuthFailure records an authentication failure and sends notification if threshold is exceeded
+func (am *AuthMiddleware) recordAuthFailure(clientID string, c *gin.Context) {
 	// Get client IP
 	clientIP := c.ClientIP()
 
