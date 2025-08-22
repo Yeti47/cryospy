@@ -40,6 +40,35 @@ header {
     border-bottom: 1px solid var(--accent-color);
 }
 
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.header-brand:hover {
+    transform: scale(1.05);
+    text-decoration: none;
+}
+
+.header-brand:hover .logo {
+    filter: drop-shadow(0 0 8px var(--highlight-color));
+}
+
+.header-brand:hover h1 {
+    color: var(--highlight-color);
+    text-shadow: 0 0 8px var(--highlight-color);
+}
+
+.logo {
+    height: 3rem;
+    width: auto;
+    filter: drop-shadow(0 0 5px var(--highlight-color));
+}
+
 header h1 {
     font-family: var(--header-font);
     color: var(--highlight-color);
@@ -69,6 +98,94 @@ nav a {
 nav a:hover, nav a.active {
     color: var(--highlight-color);
     text-shadow: 0 0 3px var(--highlight-color);
+}
+
+/* Mobile menu styles */
+.mobile-menu-toggle {
+    display: none;
+    flex-direction: column;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    position: relative;
+    z-index: 1001;
+}
+
+.hamburger-line {
+    width: 25px;
+    height: 3px;
+    background-color: var(--text-color);
+    margin: 3px 0;
+    transition: all 0.3s ease;
+    border-radius: 2px;
+}
+
+.mobile-menu-toggle.active .hamburger-line:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+    background-color: var(--highlight-color);
+}
+
+.mobile-menu-toggle.active .hamburger-line:nth-child(2) {
+    opacity: 0;
+}
+
+.mobile-menu-toggle.active .hamburger-line:nth-child(3) {
+    transform: rotate(-45deg) translate(7px, -6px);
+    background-color: var(--highlight-color);
+}
+
+/* Responsive breakpoint */
+@media (max-width: 768px) {
+    header {
+        flex-wrap: wrap;
+        position: relative;
+    }
+    
+    .mobile-menu-toggle {
+        display: flex;
+    }
+    
+    .nav-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: var(--secondary-color);
+        border-top: 1px solid var(--accent-color);
+        transform: translateY(-100%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        z-index: 1000;
+    }
+    
+    .nav-menu.active {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .nav-menu ul {
+        flex-direction: column;
+        padding: 1rem 0;
+    }
+    
+    .nav-menu li {
+        margin: 0;
+        text-align: center;
+    }
+    
+    .nav-menu a {
+        display: block;
+        padding: 1rem 2rem;
+        border-bottom: 1px solid var(--accent-color);
+        font-size: 1.2rem;
+    }
+    
+    .nav-menu li:last-child a {
+        border-bottom: none;
+    }
 }
 
 h2 {
@@ -106,6 +223,27 @@ h2 {
 .btn-danger:hover {
     background-color: #A52A2A;
     box-shadow: 0 0 10px var(--error-color);
+}
+
+.btn-primary {
+    background-color: var(--highlight-color);
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.btn-primary:hover {
+    background-color: #00d6e6;
+    box-shadow: 0 0 15px var(--highlight-color);
+}
+
+.btn-secondary {
+    background-color: var(--accent-color);
+    color: var(--text-color);
+}
+
+.btn-secondary:hover {
+    background-color: #5A7A9A;
+    box-shadow: 0 0 10px var(--highlight-color);
 }
 
 .error {
@@ -1234,6 +1372,44 @@ table td a:hover {
     font-size: 0.85rem;
 }
 
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+}
+
+.form-actions .btn {
+    flex: 1;
+    min-width: 140px;
+    text-align: center;
+}
+
+/* Responsive form actions */
+@media (max-width: 480px) {
+    .form-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .form-actions .btn {
+        flex: none;
+        width: 100%;
+        box-sizing: border-box;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .stream-selection-form {
+        margin: 1rem;
+        padding: 1.5rem;
+        box-sizing: border-box;
+    }
+}
+
 .stream-container {
     max-width: 1200px;
     margin: 2rem auto;
@@ -1575,4 +1751,98 @@ header nav ul li a[href="/stream"].active {
 
 .motion-badge-clickable:active {
     transform: scale(0.98);
+}
+
+/* Home Page Feature Cards */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin: 3rem 0;
+}
+
+.feature-card {
+    background: var(--secondary-color);
+    padding: 2rem;
+    border-radius: 8px;
+    border: 1px solid var(--accent-color);
+    text-align: center;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 250px;
+}
+
+.feature-card:hover {
+    border-color: var(--accent-color);
+    box-shadow: 0 4px 16px rgba(0, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.feature-icon {
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 0 4px rgba(0, 255, 255, 0.3));
+}
+
+.feature-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    margin-bottom: 1.5rem;
+}
+
+.feature-content h3 {
+    margin: 0 0 1rem 0;
+    color: var(--text-color);
+}
+
+.feature-content p {
+    margin: 0;
+    color: var(--text-color);
+    line-height: 1.5;
+    opacity: 0.8;
+}
+
+/* Hero Section */
+.hero {
+    text-align: center;
+    margin: 2rem 0 3rem 0;
+}
+
+.hero-logo {
+    max-width: 200px;
+    height: auto;
+    margin-bottom: 2rem;
+    filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5));
+    animation: pulse 3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5));
+    }
+    50% {
+        filter: drop-shadow(0 0 30px rgba(0, 255, 255, 0.8));
+    }
+}
+
+.hero h1 {
+    font-family: var(--header-font);
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    background: linear-gradient(45deg, var(--highlight-color), var(--accent-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hero p {
+    font-size: 1.2rem;
+    color: var(--text-color);
+    opacity: 0.8;
+    max-width: 600px;
+    margin: 0 auto;
 }

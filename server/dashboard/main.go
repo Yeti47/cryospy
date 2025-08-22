@@ -148,7 +148,13 @@ func main() {
 	authedGroup.Use(authMiddleware.RequireAuth)
 	{
 		authedGroup.GET("/", func(c *gin.Context) {
-			c.Redirect(http.StatusFound, "/clients")
+			c.Redirect(http.StatusFound, "/home")
+		})
+
+		authedGroup.GET("/home", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "home", gin.H{
+				"Title": "Home",
+			})
 		})
 
 		clientGroup := authedGroup.Group("/clients")
@@ -279,6 +285,7 @@ func createTemplateRenderer() multitemplate.Renderer {
 	}
 
 	r.AddFromFilesFuncs("layout", funcMap, "web/templates/layout.html")
+	r.AddFromFilesFuncs("home", funcMap, "web/templates/layout.html", "web/templates/home.html")
 	r.AddFromFilesFuncs("login", funcMap, "web/templates/layout.html", "web/templates/login.html")
 	r.AddFromFilesFuncs("setup", funcMap, "web/templates/layout.html", "web/templates/setup.html")
 	r.AddFromFilesFuncs("clients", funcMap, "web/templates/layout.html", "web/templates/clients.html")
