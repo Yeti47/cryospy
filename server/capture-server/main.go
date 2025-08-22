@@ -128,11 +128,7 @@ func main() {
 	clientHandler := handlers.NewClientHandler(logger, clientService)
 
 	// Set up Gin router
-	if cfg.LogLevel != "debug" {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
-	router := gin.New()
+	router := initializeGin(cfg)
 
 	// Add middleware
 	router.Use(gin.Logger())

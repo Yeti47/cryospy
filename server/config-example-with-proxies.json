@@ -1,0 +1,24 @@
+{
+  "web_addr": "127.0.0.1",
+  "web_port": 8080,
+  "capture_port": 8081,
+  "database_path": "/home/user/cryospy/cryospy.db",
+  "log_path": "/home/user/cryospy/logs",
+  "log_level": "info",
+  "trusted_proxies": {
+    "capture_server": ["192.168.1.10", "10.0.0.5"],
+    "dashboard": []
+  },
+  "streaming_settings": {
+    "cache": {
+      "enabled": true,
+      "max_size_bytes": 104857600
+    },
+    "look_ahead": 10,
+    "width": 854,
+    "height": 480,
+    "video_bitrate": "1000k",
+    "video_codec": "libx264",
+    "frame_rate": 25
+  }
+}

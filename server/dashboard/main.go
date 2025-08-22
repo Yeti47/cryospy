@@ -116,7 +116,7 @@ func main() {
 	mekStoreFactory := dashboard_sessions.NewMekStoreFactory(sessionStore)
 
 	// Set up Gin engine
-	router := gin.Default()
+	router := initializeGin(cfg)
 
 	// Serve static files
 	router.Static("/static", "web/static")

@@ -15,6 +15,7 @@ type Config struct {
 	DatabasePath                string                       `json:"database_path"`
 	LogPath                     string                       `json:"log_path"`
 	LogLevel                    string                       `json:"log_level"`
+	TrustedProxies              *TrustedProxySettings        `json:"trusted_proxies,omitempty"`
 	StorageNotificationSettings *StorageNotificationSettings `json:"storage_notification_settings,omitempty"`
 	MotionNotificationSettings  *MotionNotificationSettings  `json:"motion_notification_settings,omitempty"`
 	SMTPSettings                *SMTPSettings                `json:"smtp_settings,omitempty"`
@@ -26,6 +27,12 @@ type StorageNotificationSettings struct {
 	Recipient          string  `json:"recipient"`
 	MinIntervalMinutes int     `json:"min_interval_minutes"`
 	WarningThreshold   float64 `json:"warning_threshold"`
+}
+
+// TrustedProxySettings holds the trusted proxy configuration for each component
+type TrustedProxySettings struct {
+	CaptureServer []string `json:"capture_server"` // Trusted proxies for capture server (usually nginx)
+	Dashboard     []string `json:"dashboard"`      // Trusted proxies for dashboard (often empty for local access)
 }
 
 // MotionNotificationSettings holds the configuration for motion notifications
