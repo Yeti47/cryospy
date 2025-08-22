@@ -79,8 +79,11 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		if err != nil {
 			// Check if it's a client verification error (authentication failure)
 			if clients.IsClientVerificationError(err) {
-				m.logger.Warn("Client verification failed", "clientID", clientID)
-				m.handleAuthFailure(clientID, c)
+				m.logger.Warn("Client verification failed", "clientID", clientID, "clientIP", c.ClientIP())
+				// Only track failures if we have a valid client (exists and enabled)
+				if client != nil {
+					m.handleAuthFailure(clientID, c)
+				}
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 				c.Abort()
 				return
@@ -93,8 +96,11 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		}
 
 		if !valid {
-			m.logger.Warn("Invalid client credentials", "clientID", clientID)
-			m.handleAuthFailure(clientID, c)
+			m.logger.Warn("Invalid client credentials", "clientID", clientID, "clientIP", c.ClientIP())
+			// Only track failures if we have a valid client (exists and enabled)
+			if client != nil {
+				m.handleAuthFailure(clientID, c)
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 			c.Abort()
 			return
