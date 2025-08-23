@@ -5,5 +5,7 @@
   "camera_device": "/dev/video0",
   "buffer_size": 5,
   "settings_sync_seconds": 300,
-  "server_timeout_seconds": 30
+  "server_timeout_seconds": 30,
+  "proxy_auth_header": "",
+  "proxy_auth_value": ""
 }

@@ -15,6 +15,8 @@ type Config struct {
 	BufferSize           int    `json:"buffer_size"`            // Number of clips to buffer in memory
 	SettingsSyncSeconds  int    `json:"settings_sync_seconds"`  // How often to sync settings from server (in seconds)
 	ServerTimeoutSeconds int    `json:"server_timeout_seconds"` // HTTP timeout for server requests (in seconds)
+	ProxyAuthHeader      string `json:"proxy_auth_header"`      // Optional header name for proxy authentication (e.g., "X-Proxy-Auth")
+	ProxyAuthValue       string `json:"proxy_auth_value"`       // Optional header value for proxy authentication
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -31,6 +33,8 @@ func LoadConfig(filename string) (*Config, error) {
 				BufferSize:           3,
 				SettingsSyncSeconds:  300, // 5 minutes default
 				ServerTimeoutSeconds: 30,  // 30 seconds default
+				ProxyAuthHeader:      "",  // Optional proxy auth header name
+				ProxyAuthValue:       "",  // Optional proxy auth header value
 			}
 			if err := saveConfig(filename, defaultConfig); err != nil {
 				return nil, fmt.Errorf("failed to create default config file: %w", err)

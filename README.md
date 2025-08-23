@@ -69,8 +69,28 @@ A web-based administration interface designed for local access on the host syste
 - **Secure Authentication**: Basic authentication with encrypted client secrets
 - **Data Encryption**: All video data encrypted at rest using AES-GCM with the global MEK
 - **Session Management**: Secure web sessions for dashboard access
+- **Proxy Authentication**: Optional custom header authentication for reverse proxy deployments
 - **Proxy Security**: Configurable trusted proxy settings for production deployments
 - **HTTPS Ready**: Designed to work with reverse proxies for HTTPS termination
+
+### Defense-in-Depth Authentication
+
+CryoSpy supports a layered authentication approach for enhanced security:
+
+1. **Application Layer**: Standard Basic Authentication using client credentials
+2. **Proxy Layer**: Optional custom header authentication for reverse proxies
+
+This dual-layer approach is particularly valuable for internet-exposed deployments where additional security barriers are essential. The proxy authentication layer can be configured independently from the application authentication, allowing for flexible security policies.
+
+**Configuration Example:**
+```json
+{
+  "proxy_auth_header": "X-Proxy-Auth",
+  "proxy_auth_value": "secure-proxy-token-12345"
+}
+```
+
+The proxy authentication headers are automatically included in all API requests when configured, providing seamless integration with nginx, Apache, or other reverse proxy solutions that support custom authentication headers.
 
 > **Note**: In CryoSpy, a "client" refers to a capture device (end device running the capture-client application), not a user or browser session.
 
@@ -157,6 +177,53 @@ sudo dnf install opencv-devel pkgconf-pkg-config ffmpeg
 1. Install OpenCV and set environment variables
 2. Download FFmpeg from https://ffmpeg.org and add to PATH
 3. Install Go for Windows
+
+### Production Deployment
+
+For production deployments, especially when exposing the capture-server to the internet, consider:
+
+1. **Use release builds** with `-tags release` for optimized performance
+2. **Configure reverse proxy** (nginx/Apache) for HTTPS termination
+3. **Enable proxy authentication** for defense-in-depth security
+4. **Use automation scripts** available in the `scripts/` directory:
+   - `setup-nginx-proxy.ps1` - Windows nginx reverse proxy setup with configurable proxy authentication
+   - `install-server-linux.sh` - Linux server installation
+   - `install-client-linux.sh` - Linux client installation with configuration setup
+   - `install-server-windows.ps1` - Windows server installation with dependency management
+   - `install-client-windows.ps1` - Windows client installation with configuration setup
+
+**Cross-Platform Installation Features:**
+- **Linux & Windows**: Interactive configuration setup with proxy authentication support
+- **Linux & Windows**: Command-line parameters for automated deployment
+- **Linux**: Systemd service installation options
+- **Windows**: Windows service installation options
+- **Windows**: Automated dependency installation via Chocolatey
+- **Windows**: Firewall configuration scripts
+
+**Example automated Linux client installation:**
+```bash
+# Install with all configuration in one command
+./install-client-linux.sh --server-url "https://yourdomain.com" --client-id "camera-01" --client-secret "secure-secret" --proxy-auth-header "X-Proxy-Auth" --proxy-auth-value "proxy-token" --with-systemd --force
+```
+
+**Example automated Windows client installation:**
+```powershell
+# Install with all configuration in one command
+.\install-client-windows.ps1 -ServerUrl "https://yourdomain.com" -ClientId "camera-01" -ClientSecret "secure-secret" -ProxyAuthHeader "X-Proxy-Auth" -ProxyAuthValue "proxy-token" -InstallAsService -SetupFirewall -Force
+```
+
+**Example production client configuration with proxy auth:**
+```json
+{
+  "client_id": "camera-01",
+  "client_secret": "secure-client-secret",
+  "server_url": "https://yourdomain.com",
+  "proxy_auth_header": "X-Proxy-Auth",
+  "proxy_auth_value": "your-secure-proxy-token"
+}
+```
+
+The proxy authentication provides an additional security layer when your capture-server is exposed to the internet through a reverse proxy. This way, unauthenticated requests can be rejected before even entering the app domain.
 
 ## Configuration
 
@@ -260,6 +327,8 @@ The `trusted_proxies` configuration is important for production deployments behi
 
 > **Security Note**: Incorrectly configured trusted proxies can allow IP spoofing. Only add proxy IPs that you control and trust.
 
+> **Related Feature**: For additional security when using reverse proxies, consider configuring **proxy authentication** in your capture clients. This adds a second layer of authentication at the proxy level, complementing the trusted proxy IP configuration. See the [Client Configuration](#client-configuration) section for details on proxy authentication headers.
+
 ### Client Configuration
 Each capture client uses a local JSON configuration file:
 
@@ -271,9 +340,32 @@ Each capture client uses a local JSON configuration file:
   "camera_device": "/dev/video0",
   "buffer_size": 5,
   "settings_sync_seconds": 300,
-  "server_timeout_seconds": 30
+  "server_timeout_seconds": 30,
+  "proxy_auth_header": "X-Proxy-Auth",
+  "proxy_auth_value": "your-proxy-secret"
 }
 ```
+
+#### Optional Proxy Authentication
+The `proxy_auth_header` and `proxy_auth_value` fields enable additional authentication when your capture-server is deployed behind a reverse proxy (such as nginx) that requires custom authentication headers. This provides a defense-in-depth security model:
+
+- **Application-level authentication**: Standard Basic Auth using `client_id` and `client_secret`
+- **Proxy-level authentication**: Custom header authentication for the reverse proxy layer
+
+**Common use cases:**
+- nginx reverse proxy with custom authentication headers
+- Load balancers requiring specific authentication tokens
+- Additional security layer for internet-exposed deployments
+
+**Example nginx configuration with proxy auth:**
+```nginx
+# In your nginx server block
+if ($http_x_proxy_auth != "your-proxy-secret") {
+    return 401 "Unauthorized - Invalid proxy authentication";
+}
+```
+
+Leave these fields empty (`""`) if you're not using proxy authentication.
 
 ## Video Streaming
 

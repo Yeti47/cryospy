@@ -1,0 +1,262 @@
+name: Build and Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopencv-dev pkg-config ffmpeg
+        
+    - name: Build capture-server
+      run: |
+        cd server/capture-server
+        go mod tidy
+        CGO_ENABLED=1 go build -tags release -ldflags "-s -w" -o capture-server .
+        
+    - name: Build dashboard
+      run: |
+        cd server/dashboard
+        go mod tidy
+        CGO_ENABLED=1 go build -tags release -ldflags "-s -w" -o dashboard .
+        
+    - name: Build capture-client
+      run: |
+        cd client/capture-client
+        go mod tidy
+        CGO_ENABLED=1 go build -ldflags "-s -w" -o capture-client .
+        
+    - name: Package Linux server binaries
+      run: |
+        mkdir -p release/server-linux
+        cp server/capture-server/capture-server release/server-linux/
+        cp server/dashboard/dashboard release/server-linux/
+        cp server/config.example.json release/server-linux/
+        cp scripts/install-server-linux.sh release/server-linux/
+        chmod +x release/server-linux/*
+        tar -czf cryospy-server-linux-amd64.tar.gz -C release/server-linux .
+        
+    - name: Package Linux client binaries
+      run: |
+        mkdir -p release/client-linux
+        cp client/capture-client/capture-client release/client-linux/
+        cp client/capture-client/config.example.json release/client-linux/
+        cp scripts/install-client-linux.sh release/client-linux/
+        cp scripts/kill-camera-processes.sh release/client-linux/
+        chmod +x release/client-linux/*
+        tar -czf cryospy-client-linux-amd64.tar.gz -C release/client-linux .
+        
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: cryospy-linux-amd64
+        path: |
+          cryospy-server-linux-amd64.tar.gz
+          cryospy-client-linux-amd64.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+    
+    - name: Install vcpkg
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+        C:\vcpkg\bootstrap-vcpkg.bat
+        
+    - name: Install OpenCV and FFmpeg
+      run: |
+        C:\vcpkg\vcpkg.exe install opencv:x64-windows ffmpeg:x64-windows
+        
+    - name: Set environment variables
+      run: |
+        echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows\lib\pkgconfig" >> $env:GITHUB_ENV
+        echo "CGO_ENABLED=1" >> $env:GITHUB_ENV
+        echo "C:\vcpkg\installed\x64-windows\bin" >> $env:GITHUB_PATH
+        
+    - name: Build capture-server
+      run: |
+        cd server/capture-server
+        go mod tidy
+        go build -tags release -ldflags "-s -w" -o capture-server.exe .
+        
+    - name: Build dashboard
+      run: |
+        cd server/dashboard
+        go mod tidy
+        go build -tags release -ldflags "-s -w" -o dashboard.exe .
+        
+    - name: Build capture-client
+      run: |
+        cd client/capture-client
+        go mod tidy
+        go build -ldflags "-s -w" -o capture-client.exe .
+        
+    - name: Package Windows server binaries
+      run: |
+        mkdir release\server-windows
+        copy server\capture-server\capture-server.exe release\server-windows\
+        copy server\dashboard\dashboard.exe release\server-windows\
+        copy server\config.example.json release\server-windows\
+        copy scripts\install-server-windows.ps1 release\server-windows\
+        copy scripts\setup-nginx-proxy.ps1 release\server-windows\
+        # Copy required DLLs
+        copy C:\vcpkg\installed\x64-windows\bin\*.dll release\server-windows\ 2>$null || echo "Some DLLs not found, continuing..."
+        
+    - name: Package Windows client binaries
+      run: |
+        mkdir release\client-windows
+        copy client\capture-client\capture-client.exe release\client-windows\
+        copy client\capture-client\config.example.json release\client-windows\
+        copy scripts\install-client-windows.ps1 release\client-windows\
+        # Copy required DLLs
+        copy C:\vcpkg\installed\x64-windows\bin\*.dll release\client-windows\ 2>$null || echo "Some DLLs not found, continuing..."
+        
+    - name: Create Windows packages
+      run: |
+        Compress-Archive -Path release\server-windows\* -DestinationPath cryospy-server-windows-amd64.zip
+        Compress-Archive -Path release\client-windows\* -DestinationPath cryospy-client-windows-amd64.zip
+        
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: cryospy-windows-amd64
+        path: |
+          cryospy-server-windows-amd64.zip
+          cryospy-client-windows-amd64.zip
+
+  create-release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          cryospy-linux-amd64/cryospy-server-linux-amd64.tar.gz
+          cryospy-linux-amd64/cryospy-client-linux-amd64.tar.gz
+          cryospy-windows-amd64/cryospy-server-windows-amd64.zip
+          cryospy-windows-amd64/cryospy-client-windows-amd64.zip
+        body: |
+          ## CryoSpy Release ${{ github.ref_name }}
+          
+          ### Components Available
+          - **Server Package**: Contains capture-server and dashboard components
+          - **Client Package**: Contains capture-client for video capture machines
+          
+          ### Linux Installation
+          
+          **Server Installation:**
+          ```bash
+          tar -xzf cryospy-server-linux-amd64.tar.gz
+          cd cryospy-server-linux-amd64
+          chmod +x install-server-linux.sh
+          ./install-server-linux.sh --with-systemd
+          ```
+          
+          **Client Installation:**
+          ```bash
+          tar -xzf cryospy-client-linux-amd64.tar.gz
+          cd cryospy-client-linux-amd64
+          chmod +x install-client-linux.sh
+          ./install-client-linux.sh --with-systemd
+          ```
+          
+          **Automated Installation Examples:**
+          ```bash
+          # Server with systemd services
+          ./install-server-linux.sh --with-systemd --force
+          
+          # Client with full configuration and systemd
+          ./install-client-linux.sh --server-url "https://cryospy.yourdomain.com" --client-id "camera-001" --client-secret "secret" --proxy-auth-header "X-CryoSpy-Auth" --proxy-auth-value "your-secret-key" --with-systemd --force
+          ```
+          
+          **Troubleshooting Camera Issues:**
+          ```bash
+          # If camera is blocked by other processes
+          ./kill-camera-processes.sh
+          ```
+          
+          ### Windows Installation
+          
+          **Server Installation:**
+          1. Extract cryospy-server-windows-amd64.zip
+          2. Run PowerShell as Administrator
+          3. Execute: `.\install-server-windows.ps1`
+          4. For internet access: `.\setup-nginx-proxy.ps1 -Domain yourdomain.com`
+          
+          **Client Installation:**
+          1. Extract cryospy-client-windows-amd64.zip
+          2. Run PowerShell as Administrator  
+          3. Execute: `.\install-client-windows.ps1`
+          
+          **Automated Installation Examples:**
+          ```powershell
+          # Server with services and firewall
+          .\install-server-windows.ps1 -InstallAsService -SetupFirewall
+          
+          # Server with nginx proxy and auth
+          .\setup-nginx-proxy.ps1 -Domain "cryospy.yourdomain.com" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key"
+          
+          # Client with full configuration
+          .\install-client-windows.ps1 -ServerUrl "https://cryospy.yourdomain.com" -ClientId "camera-001" -ClientSecret "secret" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key" -InstallAsService
+          ```
+          
+          ### Configuration
+          - Server and client configurations are automatically created during installation
+          - Configuration files are placed in the user's home directory: `~/cryospy/config.json`
+          - See the included config.example.json files for reference
+          - **Proxy Authentication**: Both server and client support configurable proxy authentication for enhanced security
+          
+          ### Quick Start
+          
+          **On Server Machine:**
+          ```bash
+          # After running installation script
+          ./capture-server &
+          ./dashboard &
+          # Access dashboard at http://localhost:8080
+          ```
+          
+          **On Client Machines:**
+          ```bash
+          # Configuration is set up during installation
+          # Just start the client after installation
+          ./capture-client
+          ```
+          
+          ### Security Features
+          - **End-to-end encryption** ensures video data is encrypted at rest, and additionally in transit if using HTTPS
+          - **Proxy authentication** support for defense-in-depth security
+          - **Configurable trusted proxies** for production deployments
+          - **Automatic client disabling** after authentication failures
+          - **Rate limiting** and **HTTPS enforcement** via nginx proxy setup
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

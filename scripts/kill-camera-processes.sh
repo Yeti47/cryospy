@@ -49,7 +49,7 @@ kill_video_processes() {
                                 fi
                             fi
                             
-                            echo "� Killing process $pid ($cmd)..."
+                            echo "Killing process $pid ($cmd)..."
                             kill -TERM "$pid" 2>/dev/null || true
                             killed_any=true
                             

@@ -12,6 +12,18 @@ import (
 	"time"
 )
 
+// ClientAuth holds client authentication credentials
+type ClientAuth struct {
+	ClientID     string
+	ClientSecret string
+}
+
+// ProxyAuth holds proxy authentication configuration
+type ProxyAuth struct {
+	Header string
+	Value  string
+}
+
 // CaptureServerClient handles communication with the capture server
 type CaptureServerClient interface {
 	GetClientSettings(ctx context.Context) (*ClientSettingsResponse, error)
@@ -20,21 +32,33 @@ type CaptureServerClient interface {
 
 // captureServerClient implements ClientService using HTTP
 type captureServerClient struct {
-	serverURL    string
-	clientID     string
-	clientSecret string
-	httpClient   *http.Client
+	serverURL  string
+	clientAuth ClientAuth
+	proxyAuth  ProxyAuth
+	httpClient *http.Client
 }
 
 // NewCaptureServerClient creates a new HTTP client service
-func NewCaptureServerClient(serverURL, clientID, clientSecret string, timeout time.Duration) CaptureServerClient {
+func NewCaptureServerClient(serverURL string, clientAuth ClientAuth, proxyAuth ProxyAuth, timeout time.Duration) CaptureServerClient {
 	return &captureServerClient{
-		serverURL:    serverURL,
-		clientID:     clientID,
-		clientSecret: clientSecret,
+		serverURL:  serverURL,
+		clientAuth: clientAuth,
+		proxyAuth:  proxyAuth,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+	}
+}
+
+// addAuthHeaders adds both basic auth and proxy auth headers to the request
+func (s *captureServerClient) addAuthHeaders(req *http.Request) {
+	// Add Basic Auth header
+	auth := base64.StdEncoding.EncodeToString([]byte(s.clientAuth.ClientID + ":" + s.clientAuth.ClientSecret))
+	req.Header.Set("Authorization", "Basic "+auth)
+
+	// Add proxy auth header if configured
+	if s.proxyAuth.Header != "" && s.proxyAuth.Value != "" {
+		req.Header.Set(s.proxyAuth.Header, s.proxyAuth.Value)
 	}
 }
 
@@ -47,9 +71,8 @@ func (s *captureServerClient) GetClientSettings(ctx context.Context) (*ClientSet
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add Basic Auth header
-	auth := base64.StdEncoding.EncodeToString([]byte(s.clientID + ":" + s.clientSecret))
-	req.Header.Set("Authorization", "Basic "+auth)
+	// Add authentication headers
+	s.addAuthHeaders(req)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -118,8 +141,7 @@ func (s *captureServerClient) UploadClip(ctx context.Context, request UploadClip
 	}
 
 	// Add headers
-	auth := base64.StdEncoding.EncodeToString([]byte(s.clientID + ":" + s.clientSecret))
-	req.Header.Set("Authorization", "Basic "+auth)
+	s.addAuthHeaders(req)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	// Make request

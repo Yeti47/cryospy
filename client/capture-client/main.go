@@ -77,7 +77,16 @@ func main() {
 	log.Println("Setting up dependencies...")
 
 	// Create server client
-	serverClient := client.NewCaptureServerClient(cfg.ServerURL, cfg.ClientID, cfg.ClientSecret, time.Duration(cfg.ServerTimeoutSeconds)*time.Second)
+	// Create server client with bundled auth parameters
+	clientAuth := client.ClientAuth{
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+	}
+	proxyAuth := client.ProxyAuth{
+		Header: cfg.ProxyAuthHeader,
+		Value:  cfg.ProxyAuthValue,
+	}
+	serverClient := client.NewCaptureServerClient(cfg.ServerURL, clientAuth, proxyAuth, time.Duration(cfg.ServerTimeoutSeconds)*time.Second)
 
 	// Create client settings provider
 	settingsCacheDuration := time.Duration(cfg.SettingsSyncSeconds) * time.Second
