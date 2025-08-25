@@ -186,20 +186,65 @@ jobs:
       with:
         go-version: '1.24'
     
-    - name: Install vcpkg
+    - name: Install Chocolatey
       run: |
-        git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-        C:\vcpkg\bootstrap-vcpkg.bat
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
         
-    - name: Install OpenCV and FFmpeg
+    - name: Install FFmpeg via Chocolatey
       run: |
-        C:\vcpkg\vcpkg.exe install opencv[contrib]:x64-windows ffmpeg:x64-windows
+        # Install FFmpeg via Chocolatey (fast runtime dependency)
+        choco install ffmpeg -y
+        
+    - name: Cache OpenCV build
+      id: cache-opencv
+      uses: actions/cache@v4
+      with:
+        path: C:\opencv
+        key: opencv-4.12.0-gocv-windows-${{ hashFiles('.github/workflows/release.yml') }}
+        restore-keys: |
+          opencv-4.12.0-gocv-windows-
+        
+    - name: Install build tools for OpenCV compilation
+      if: steps.cache-opencv.outputs.cache-hit != 'true'
+      run: |
+        # Install Git (required by gocv build script)
+        choco install git -y
+        
+        # Install Visual Studio Build Tools (required for compilation)
+        choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools" -y
+        
+    - name: Build OpenCV with contrib modules using official gocv script
+      if: steps.cache-opencv.outputs.cache-hit != 'true'
+      run: |
+        # Download and run the official gocv OpenCV build script
+        # This builds OpenCV 4.12.0 + contrib modules specifically for gocv
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hybridgroup/gocv/release/win_build_opencv.cmd" -OutFile "win_build_opencv.cmd"
+        
+        Write-Host "Building OpenCV with contrib modules using official gocv script..."
+        Write-Host "This will take at least 1 hour but ensures perfect gocv compatibility..."
+        
+        # Run the build script
+        cmd.exe /c "win_build_opencv.cmd"
+        
+    - name: Verify OpenCV installation
+      run: |
+        # Verify OpenCV was either built or restored from cache
+        if (Test-Path "C:\opencv\build") {
+          Write-Host "✅ OpenCV installation found at C:\opencv\build"
+          Get-ChildItem "C:\opencv\build" -Recurse -Include "*.dll" | Select-Object -First 5 | ForEach-Object { Write-Host "  Found: $($_.Name)" }
+        } else {
+          Write-Host "❌ OpenCV installation not found!"
+          exit 1
+        }
         
     - name: Set environment variables
       run: |
-        echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows\lib\pkgconfig" >> $env:GITHUB_ENV
+        # gocv script installs OpenCV to C:\opencv, FFmpeg via Chocolatey to C:\tools\ffmpeg
         echo "CGO_ENABLED=1" >> $env:GITHUB_ENV
-        echo "C:\vcpkg\installed\x64-windows\bin" >> $env:GITHUB_PATH
+        echo "C:\opencv\build\x64\vc16\bin;C:\tools\ffmpeg\bin" >> $env:GITHUB_PATH
+        echo "OpenCV_DIR=C:\opencv\build" >> $env:GITHUB_ENV
         
     - name: Build capture-server
       run: |
@@ -227,8 +272,15 @@ jobs:
         copy server\config.example.json release\server-windows\
         copy scripts\install-server-windows.ps1 release\server-windows\
         copy scripts\setup-nginx-proxy.ps1 release\server-windows\
-        # Copy required DLLs
-        copy C:\vcpkg\installed\x64-windows\bin\*.dll release\server-windows\ 2>$null || echo "Some DLLs not found, continuing..."
+        
+    - name: Copy DLLs to server output
+      run: |
+        # Copy OpenCV DLLs built by gocv script to server directory
+        copy C:\opencv\build\x64\vc16\bin\opencv_world4*.dll release\server-windows\
+        copy C:\opencv\build\x64\vc16\bin\opencv_videoio_ffmpeg4*.dll release\server-windows\
+        
+        # Copy FFmpeg DLLs from Chocolatey installation to server directory
+        copy C:\tools\ffmpeg\bin\*.dll release\server-windows\
         
     - name: Package Windows client binaries
       run: |
@@ -236,8 +288,9 @@ jobs:
         copy client\capture-client\capture-client.exe release\client-windows\
         copy client\capture-client\config.example.json release\client-windows\
         copy scripts\install-client-windows.ps1 release\client-windows\
-        # Copy required DLLs
-        copy C:\vcpkg\installed\x64-windows\bin\*.dll release\client-windows\ 2>$null || echo "Some DLLs not found, continuing..."
+        # Copy required DLLs from OpenCV and FFmpeg installations
+        copy C:\opencv\build\x64\vc16\bin\*.dll release\client-windows\ 2>$null || echo "Some OpenCV DLLs not found, continuing..."
+        copy C:\tools\ffmpeg\bin\*.dll release\client-windows\ 2>$null || echo "Some FFmpeg DLLs not found, continuing..."
         
     - name: Create Windows packages
       run: |
@@ -332,9 +385,12 @@ jobs:
           4. For internet access: `.\setup-nginx-proxy.ps1 -Domain yourdomain.com`
           
           **Client Installation:**
-          1. Extract cryospy-client-windows-amd64.zip
-          2. Run PowerShell as Administrator  
+          1. Extract cryospy-client-windows-amd64.zip to desired location
+          2. Run PowerShell as Administrator (optional, for service installation)
           3. Execute: `.\install-client-windows.ps1`
+          
+          **Note:** All OpenCV dependencies are bundled with the Windows release.
+          Only FFmpeg is optionally installed for advanced video processing features.
           
           **Automated Installation Examples:**
           ```powershell
@@ -344,7 +400,7 @@ jobs:
           # Server with nginx proxy and auth
           .\setup-nginx-proxy.ps1 -Domain "cryospy.yourdomain.com" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key"
           
-          # Client with full configuration
+          # Client with full configuration (FFmpeg is optional)
           .\install-client-windows.ps1 -ServerUrl "https://cryospy.yourdomain.com" -ClientId "camera-001" -ClientSecret "secret" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key" -InstallAsService
           ```
           
@@ -355,6 +411,13 @@ jobs:
           - **Easy Installation**: Single executable file, no package management required
           - **Portable**: Can run from any location without installation
           - **Self-Contained**: No conflicts with system OpenCV installations
+          
+          ### Benefits of Bundled Dependencies (Windows Client)
+          
+          - **Zero Dependencies**: All OpenCV DLLs are included in the release package
+          - **Guaranteed Compatibility**: Built with the exact OpenCV version used by gocv
+          - **No Compilation Required**: End users don't need Visual Studio or build tools
+          - **Simplified Installation**: Just extract and run the installation script
           
           ### Configuration
           - Server configurations are automatically created during installation
@@ -417,12 +480,17 @@ jobs:
           
           **Windows Client Issues:**
           ```powershell
-          # If OpenCV DLLs are missing after extraction
-          # Ensure all DLLs from the zip are in the same directory as capture-client.exe
+          # All required DLLs are bundled with the release package
+          # If you encounter DLL errors, ensure you extracted the complete package
           
           # For camera access issues
           # Check Windows Camera privacy settings
           # Ensure no other applications are using the camera
+          
+          # FFmpeg-related features (optional)
+          # If advanced video processing features don't work:
+          choco install ffmpeg
+          # or manually install FFmpeg and add to PATH
           ```
         draft: false
         prerelease: false

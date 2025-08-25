@@ -30,21 +30,26 @@ param(
     [switch]$Force
 )
 
-# Ensure running as Administrator
-if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Write-Host "This script requires Administrator privileges for best results." -ForegroundColor Yellow
-    Write-Host "Some features may not work properly without admin privileges." -ForegroundColor Yellow
-    Write-Host ""
-    
-    $continue = Read-Host "Continue anyway? (y/N)"
-    if ($continue -ne 'y' -and $continue -ne 'Y') {
-        exit 1
-    }
+# Ensure running as Administrator for service installation
+if ($InstallAsService -and -NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Service installation requires Administrator privileges." -ForegroundColor Red
+    Write-Host "Please run PowerShell as Administrator to install as a service." -ForegroundColor Yellow
+    exit 1
 }
 
 Write-Host "📹 CryoSpy Capture Client - Windows Installation" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host ""
+
+# Function to check if FFmpeg is available in PATH (optional runtime dependency)
+function Test-FFmpegAvailable {
+    try {
+        $null = Get-Command ffmpeg -ErrorAction Stop
+        return $true
+    } catch {
+        return $false
+    }
+}
 
 # Function to check if Chocolatey is installed
 function Test-ChocolateyInstalled {
@@ -76,51 +81,64 @@ function Install-Chocolatey {
     }
 }
 
-# Function to install dependencies
-function Install-Dependencies {
-    Write-Host "📥 Installing client dependencies..." -ForegroundColor Green
-    Write-Host "This may take several minutes..." -ForegroundColor Gray
+# Function to install optional runtime dependencies
+function Install-OptionalDependencies {
+    Write-Host "📥 Installing optional runtime dependencies..." -ForegroundColor Green
     
-    try {
-        # Install OpenCV and FFmpeg
-        choco install opencv ffmpeg -y
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Dependencies installed successfully" -ForegroundColor Green
-            return $true
-        } else {
-            Write-Warning "Failed to install some dependencies via Chocolatey"
-            return $false
-        }
-    } catch {
-        Write-Error "Error installing dependencies: $($_.Exception.Message)"
-        return $false
+    $needsFFmpeg = -not (Test-FFmpegAvailable)
+    
+    if (-not $needsFFmpeg) {
+        Write-Host "ℹ️  All optional dependencies are already available" -ForegroundColor Cyan
+        return $true
     }
+    
+    # Check if Chocolatey is available for FFmpeg installation
+    if (-not (Test-ChocolateyInstalled)) {
+        Write-Host "ℹ️  Installing Chocolatey to install FFmpeg (optional runtime dependency)" -ForegroundColor Cyan
+        if (-not (Install-Chocolatey)) {
+            Write-Warning "Could not install Chocolatey. FFmpeg installation skipped."
+            Write-Host "ℹ️  FFmpeg is optional and only needed for certain video processing features" -ForegroundColor Yellow
+            return $true
+        }
+    }
+    
+    # Install FFmpeg via Chocolatey (optional runtime dependency)
+    if ($needsFFmpeg) {
+        Write-Host "  • Installing FFmpeg (optional runtime dependency)" -ForegroundColor White
+        try {
+            choco install ffmpeg -y
+            if ($LASTEXITCODE -ne 0) {
+                throw "Chocolatey FFmpeg installation failed"
+            }
+            Write-Host "    ✅ FFmpeg installed successfully" -ForegroundColor Green
+        } catch {
+            Write-Warning "Failed to install FFmpeg: $($_.Exception.Message)"
+            Write-Host "ℹ️  FFmpeg is optional and only needed for certain video processing features" -ForegroundColor Yellow
+        }
+    }
+    
+    Write-Host "✅ Optional dependency installation completed" -ForegroundColor Green
+    return $true
 }
 
-# Function to show manual installation instructions
+# Function to show manual installation instructions for optional dependencies
 function Show-ManualInstallInstructions {
     Write-Host ""
-    Write-Host "📋 Manual Installation Required" -ForegroundColor Yellow
-    Write-Host "===============================" -ForegroundColor Yellow
+    Write-Host "📋 Optional Runtime Dependencies" -ForegroundColor Yellow
+    Write-Host "================================" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Please install the following dependencies manually:" -ForegroundColor White
+    Write-Host "The following dependencies are optional for enhanced functionality:" -ForegroundColor White
     Write-Host ""
-    Write-Host "1. OpenCV for Windows:" -ForegroundColor White
-    Write-Host "   - Download from: https://opencv.org/releases/" -ForegroundColor Cyan
-    Write-Host "   - Extract to C:\opencv" -ForegroundColor Cyan
-    Write-Host "   - Add C:\opencv\build\x64\vc15\bin to your PATH" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "2. FFmpeg for Windows:" -ForegroundColor White
+    Write-Host "FFmpeg (optional - for advanced video processing):" -ForegroundColor White
     Write-Host "   - Download from: https://ffmpeg.org/download.html#build-windows" -ForegroundColor Cyan
-    Write-Host "   - Extract to C:\ffmpeg" -ForegroundColor Cyan
-    Write-Host "   - Add C:\ffmpeg\bin to your PATH" -ForegroundColor Cyan
+    Write-Host "   - Extract to C:\\ffmpeg" -ForegroundColor Cyan
+    Write-Host "   - Add C:\\ffmpeg\\bin to your PATH" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Alternatively, you can use vcpkg:" -ForegroundColor White
-    Write-Host "   git clone https://github.com/Microsoft/vcpkg.git" -ForegroundColor Cyan
-    Write-Host "   cd vcpkg" -ForegroundColor Cyan
-    Write-Host "   .\bootstrap-vcpkg.bat" -ForegroundColor Cyan
-    Write-Host "   .\vcpkg install opencv ffmpeg" -ForegroundColor Cyan
+    Write-Host "Alternatively, use Chocolatey:" -ForegroundColor White
+    Write-Host "   choco install ffmpeg" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "NOTE: All OpenCV dependencies are bundled with the release package." -ForegroundColor Green
+    Write-Host "No additional installations are required for basic functionality." -ForegroundColor Green
     Write-Host ""
     Read-Host "Press Enter to continue..."
 }
@@ -348,32 +366,46 @@ function Configure-Firewall {
 
 # Main installation logic
 try {
-    # Install dependencies
-    if (-not $SkipDependencies) {
-        if (-not (Test-ChocolateyInstalled)) {
-            $installChoco = $true
-            if (-not $Force) {
-                $response = Read-Host "Chocolatey not found. Install it? (Y/n)"
-                $installChoco = ($response -eq '' -or $response -eq 'y' -or $response -eq 'Y')
-            }
-            
-            if ($installChoco) {
-                if (-not (Install-Chocolatey)) {
-                    Show-ManualInstallInstructions
-                }
-            } else {
-                Show-ManualInstallInstructions
-            }
+    # Check if this is a bundled release (has all required DLLs)
+    $isReleasePackage = Test-Path "capture-client.exe"
+    
+    if (-not $isReleasePackage) {
+        Write-Host "❌ capture-client.exe not found in current directory" -ForegroundColor Red
+        Write-Host "Please run this script from the extracted release package directory." -ForegroundColor Yellow
+        exit 1
+    }
+    
+    Write-Host "✅ Found CryoSpy Capture Client release package" -ForegroundColor Green
+    
+    # Check if FFmpeg is available (optional runtime dependency)
+    $hasFFmpegInPath = Test-FFmpegAvailable
+    
+    if ($hasFFmpegInPath) {
+        Write-Host "✅ FFmpeg found in PATH (optional runtime dependency satisfied)" -ForegroundColor Green
+    } else {
+        Write-Host "ℹ️  FFmpeg not found in PATH (optional - only needed for advanced features)" -ForegroundColor Cyan
+    }
+    
+    Write-Host ""
+    
+    # Install optional dependencies if requested
+    if (-not $SkipDependencies -and -not $hasFFmpegInPath) {
+        $installOptional = $true
+        if (-not $Force) {
+            $response = Read-Host "Install optional FFmpeg dependency? (Y/n)"
+            $installOptional = ($response -eq '' -or $response -eq 'y' -or $response -eq 'Y')
         }
         
-        if (Test-ChocolateyInstalled) {
-            if (-not (Install-Dependencies)) {
-                Show-ManualInstallInstructions
-            }
+        if ($installOptional) {
+            Install-OptionalDependencies
+        } else {
+            Write-Host "⏭️  Skipping optional dependency installation" -ForegroundColor Yellow
         }
-    } else {
-        Write-Host "⏭️  Skipping dependency installation" -ForegroundColor Yellow
+    } elseif ($SkipDependencies) {
+        Write-Host "⏭️  Skipping dependency installation (--SkipDependencies specified)" -ForegroundColor Yellow
     }
+    
+    Write-Host ""
     
     # Create configuration file
     Create-ConfigFile -ServerUrl $ServerUrl -ClientId $ClientId -ClientSecret $ClientSecret -ProxyAuthHeader $ProxyAuthHeader -ProxyAuthValue $ProxyAuthValue | Out-Null
@@ -396,6 +428,15 @@ try {
     Write-Host "🎉 Client Installation Complete!" -ForegroundColor Green
     Write-Host "=================================" -ForegroundColor Green
     Write-Host ""
+    Write-Host "📋 Installation Summary:" -ForegroundColor Cyan
+    Write-Host "  • CryoSpy Capture Client: ✅ Ready" -ForegroundColor White
+    Write-Host "  • All OpenCV dependencies: ✅ Bundled in release" -ForegroundColor White
+    if (Test-FFmpegAvailable) {
+        Write-Host "  • FFmpeg (optional): ✅ Available" -ForegroundColor White
+    } else {
+        Write-Host "  • FFmpeg (optional): ⚠️  Not installed" -ForegroundColor Yellow
+    }
+    Write-Host ""
     Write-Host "IMPORTANT: Configuration Review!" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "The client configuration has been created, but please review config.json:" -ForegroundColor White
@@ -410,16 +451,9 @@ try {
     Write-Host "    Option A - Manual startup:" -ForegroundColor White
     Write-Host "      - Double-click start-client.bat" -ForegroundColor Cyan
     Write-Host ""
-    
-    if ($InstallAsService) {
-        Write-Host "    Option B - Windows Service:" -ForegroundColor White
-        Write-Host "      - Run install-service.bat as Administrator" -ForegroundColor Cyan
-        Write-Host "      - Service will start automatically on boot" -ForegroundColor Cyan
-    } else {
-        Write-Host "    Option B - Windows Service:" -ForegroundColor White
-        Write-Host "      - Run install-service.bat as Administrator" -ForegroundColor Cyan
-        Write-Host "      - Service will start automatically on boot" -ForegroundColor Cyan
-    }
+    Write-Host "    Option B - Windows Service:" -ForegroundColor White
+    Write-Host "      - Run install-service.bat as Administrator" -ForegroundColor Cyan
+    Write-Host "      - Service will start automatically on boot" -ForegroundColor Cyan
     
     Write-Host ""
     Write-Host "Use stop-client.bat to stop the client when needed." -ForegroundColor White

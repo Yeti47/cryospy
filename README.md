@@ -23,16 +23,16 @@ CryoSpy is a privacy-focused surveillance system developed for secure self-hosti
 CryoSpy is available in multiple distribution formats to suit different needs:
 
 ### Pre-built Releases (Recommended)
-- **Linux Server**: Static binaries with installation scripts
-- **Linux Client**: AppImage with all dependencies bundled (no OpenCV installation required)
-- **Windows**: Complete packages with all DLLs included
+- **Linux Server**: Static binaries with installation scripts (handles FFmpeg installation)
+- **Linux Client**: AppImage with all dependencies bundled (includes FFmpeg)
+- **Windows**: Complete packages with installation scripts (handles FFmpeg installation)
 
 ### Building from Source
 - Full source code available for customization
 - Requires manual dependency installation
 - Recommended only for developers or advanced users
 
-**For most users, we recommend using the pre-built releases** to avoid the complexity of OpenCV dependency management.
+**For most users, we recommend using the pre-built releases** which include installation scripts that handle all dependency management automatically.
 
 ## Key Features
 
@@ -114,37 +114,41 @@ The proxy authentication headers are automatically included in all API requests 
 
 ### Prerequisites
 
-- **Go 1.24.3** or later (for building from source)
-- **OpenCV 4.x** development libraries (for building capture client from source)
-- **FFmpeg** for video processing (runtime dependency for server components)
-- **SQLite** (bundled with Go SQLite driver)
-- **Webcam devices** for capture clients
+**Runtime Dependencies (All Deployments):**
+- **FFmpeg**: Required for all CryoSpy components (video processing)
+- **SQLite**: Bundled with Go SQLite driver
+- **Webcam devices**: For capture clients
 
-### Installation Options
+**Build Dependencies (Source Builds Only):**
+- **Go 1.24.3** or later
+- **OpenCV 4.x** development libraries (capture client only)
+- **C/C++ compiler** (for OpenCV CGO bindings)
 
-#### Option 1: Pre-built Releases (Recommended)
+## Installation
 
-**For most users, we recommend using the pre-built releases:**
+### Option 1: Pre-built Releases (Recommended)
+
+Pre-built releases include installation scripts that automatically handle all dependency management.
 
 **Linux Server:**
 ```bash
-# Download and extract server package
+# Download and extract
 wget https://github.com/Yeti47/cryospy/releases/latest/download/cryospy-server-linux-amd64.tar.gz
 tar -xzf cryospy-server-linux-amd64.tar.gz
 cd cryospy-server-linux-amd64
 
-# Run installation script (automatically installs FFmpeg and other dependencies)
+# Install with automatic dependency management
 chmod +x install-server-linux.sh
 ./install-server-linux.sh --with-systemd
 
-# Optional, but recommended: Set up nginx reverse proxy for internet access. Only exposes capture-server, but not the admin dashboard
+# Optional: Set up nginx reverse proxy
 chmod +x setup-nginx-proxy.sh
 ./setup-nginx-proxy.sh --domain yourdomain.com --email admin@yourdomain.com
 ```
 
-**Linux Client (AppImage - No Dependencies Required):**
+**Linux Client (AppImage):**
 ```bash
-# Download AppImage
+# Download AppImage (all dependencies bundled)
 wget https://github.com/Yeti47/cryospy/releases/latest/download/cryospy-capture-client-linux-x86_64.AppImage
 chmod +x cryospy-capture-client-linux-x86_64.AppImage
 
@@ -156,238 +160,146 @@ chmod +x cryospy-capture-client-linux-x86_64.AppImage
 **Windows (Server and Client):**
 ```powershell
 # Download and extract appropriate package
-# Run the installation scripts as Administrator (scripts handle FFmpeg and other dependencies automatically)
+# Run installation scripts (handle dependency management automatically)
 .\install-server-windows.ps1  # For server
 .\install-client-windows.ps1  # For client
 
-# Optional: Set up nginx reverse proxy on your server for internet access. Only exposes capture-server, but not the admin dashboard
+# Optional: Set up nginx reverse proxy
 .\setup-nginx-proxy.ps1 -Domain "yourdomain.com" -CertPath "C:\ssl\certs\yourdomain.com"
 ```
 
-#### Option 2: Building from Source
+### Option 2: Building from Source
 
-**Only necessary if you want to modify the code or use unsupported platforms:**
+**Only recommended for developers or users requiring customization.**
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Yeti47/cryospy.git
-   cd cryospy
-   ```
+#### Step 1: Install Development Dependencies
 
-2. **Install development dependencies** (see [Dependencies Installation](#dependencies-installation) below)
-
-3. **Build all components:**
-   ```bash
-   # Build capture server (debug mode)
-   cd server/capture-server
-   go mod tidy
-   go build -o capture-server .
-   
-   # Build dashboard (debug mode)
-   cd ../dashboard
-   go mod tidy
-   go build -o dashboard .
-   
-   # Build capture client
-   cd ../../client/capture-client
-   go mod tidy
-   go build -o capture-client .
-   ```
-
-   **For production deployments**, use release builds which optimize Gin for production:
-   ```bash
-   # Build with release tags for production
-   go build -tags release -o capture-server .
-   go build -tags release -o dashboard .
-   ```
-
-4. **Configure the server:**
-   ```bash
-   # Copy example config to user's home directory
-   mkdir -p ~/cryospy
-   cp server/config.example.json ~/cryospy/config.json
-   # Edit ~/cryospy/config.json with your settings
-   ```
-
-5. **Start the services:**
-   ```bash
-   # Start capture server (from server/ directory)
-   ./capture-server/capture-server
-   
-   # Start dashboard (from server/ directory)
-   ./dashboard/dashboard
-   ```
-
-6. **Set up first client:**
-   - Open the dashboard at `http://localhost:8080`
-   - Complete the initial setup to create your Master Encryption Key
-   - Create a new client and note the client ID and secret
-   - Configure and start the capture client
-
-### Dependencies Installation
-
-**⚠️ Important Runtime Dependencies:**
-- **FFmpeg**: Required on server and client machines for video processing (runtime only - no linking/compilation needed)
-- **OpenCV**: Only required for building capture client from source (not needed for AppImage)
-
-**The following build dependencies are only required for building from source:**
-
-> **Note**: FFmpeg is **not** required for building/compilation since CryoSpy uses external process execution rather than library linking. FFmpeg only needs to be available at runtime.
-
-
-#### Ubuntu/Debian (Building from Source):
-
-**For server components:**
+**Linux (Ubuntu/Debian):**
 ```bash
+# Runtime dependencies
 sudo apt update
+sudo apt install -y ffmpeg
+
+# Build dependencies
 sudo apt install -y build-essential pkg-config
-# Note: FFmpeg not needed for building - only required at runtime
+
+# For capture client: OpenCV with contrib modules
+sudo apt install -y libopencv-dev libopencv-contrib-dev
 ```
 
-**For capture client (if not using AppImage):**
+**Note:** Ubuntu/Debian's OpenCV packages may lack some contrib modules. If you encounter ArUco-related errors, consider using the pre-built AppImage or building OpenCV from source with contrib modules.
+
+**Linux (Fedora/RHEL):**
 ```bash
-sudo apt update
-sudo apt install -y libopencv-dev libopencv-contrib-dev pkg-config build-essential
-# Note: build-essential provides gcc/g++ compilers needed for OpenCV CGO bindings
-# Note: FFmpeg not needed for building - only required at runtime
-```
+# Runtime dependencies
+sudo dnf install -y ffmpeg
 
-**⚠️ Important:** On Ubuntu/Debian, the standard OpenCV packages may not include all required contrib modules (such as ArUco) needed by the capture client. **We recommend using the pre-built AppImage instead** which includes all dependencies.
+# Build dependencies
+sudo dnf install -y gcc gcc-c++ pkgconf-pkg-config
 
-**If you must build the capture client from source and encounter ArUco-related errors**, you'll need to build OpenCV from source with contrib modules:
-```bash
-# Install build dependencies
-sudo apt update
-sudo apt install -y \
-  build-essential cmake git pkg-config ffmpeg \
-  libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev \
-  libtbb12 libtbb-dev \
-  libjpeg-dev libpng-dev libtiff-dev libdc1394-dev
-# Note: FFmpeg and its dev libraries above are needed for OpenCV's video support during compilation
-
-# Download OpenCV and contrib sources
-OPENCV_VERSION=4.9.0
-git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git
-git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git
-mkdir -p opencv/build
-cd opencv/build
-
-# Configure and build
-cmake -D CMAKE_BUILD_TYPE=Release \
-      -D CMAKE_INSTALL_PREFIX=/usr/local \
-      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-      -D BUILD_EXAMPLES=OFF \
-      -D BUILD_TESTS=OFF \
-      -D BUILD_PERF_TESTS=OFF \
-      -D BUILD_opencv_python3=OFF \
-      -D WITH_TBB=ON \
-      -D WITH_FFMPEG=ON \
-      ..
-make -j$(nproc)
-sudo make install
-sudo ldconfig
-
-# Set PKG_CONFIG_PATH
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
-```
-
-#### Fedora/CentOS/RHEL (Building from Source):
-```bash
-# For server components (no FFmpeg needed for building)
-sudo dnf install pkgconf-pkg-config
-
-# For capture client (requires C/C++ compilers for OpenCV CGO bindings)
-sudo dnf install gcc gcc-c++ opencv-devel pkgconf-pkg-config
-```
-
-**Note:** Fedora's `opencv-devel` package includes contrib modules by default, making it easier to build the capture client from source compared to Ubuntu/Debian.
-
-#### Windows (Building from Source):
-```bash
-# Install dependencies via vcpkg
-git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-C:\vcpkg\bootstrap-vcpkg.bat
-C:\vcpkg\vcpkg.exe install opencv[contrib]:x64-windows ffmpeg:x64-windows
-
-# Set environment variables
-set PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows\lib\pkgconfig
-set CGO_ENABLED=1
-
-# Note: FFmpeg DLLs are needed at runtime, not for linking during compilation
-# Ensure FFmpeg is in PATH for runtime
-set PATH=%PATH%;C:\vcpkg\installed\x64-windows\bin
-```
-
-**For most Windows users, we recommend the pre-built releases which include all necessary DLLs.**
-
-#### Runtime Dependencies (All Deployments)
-
-**FFmpeg must be installed on all machines running CryoSpy components (server or client):**
-
-> **Important**: FFmpeg is a runtime dependency only. CryoSpy does not link to FFmpeg libraries during compilation - instead, it spawns FFmpeg processes at runtime for video processing tasks.
-
-**Linux:**
-```bash
-# Ubuntu/Debian
-sudo apt install ffmpeg
-
-# Fedora/RHEL
-sudo dnf install ffmpeg
-
-# Arch Linux
-sudo pacman -S ffmpeg
+# For capture client: OpenCV with contrib modules (included by default)
+sudo dnf install -y opencv-devel
 ```
 
 **Windows:**
 ```powershell
-# Via Chocolatey (recommended)
+# Install FFmpeg via Chocolatey
 choco install ffmpeg
 
-# Or download from: https://ffmpeg.org/download.html#build-windows
-# And add to system PATH
+# Install OpenCV via vcpkg
+git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
+C:\vcpkg\vcpkg.exe install opencv[contrib]:x64-windows
+
+# Set environment variables
+$env:PKG_CONFIG_PATH = "C:\vcpkg\installed\x64-windows\lib\pkgconfig"
+$env:CGO_ENABLED = "1"
+$env:PATH += ";C:\vcpkg\installed\x64-windows\bin"
 ```
 
-**macOS:**
+#### Step 2: Build Components
+
 ```bash
-# Via Homebrew
-brew install ffmpeg
+# Clone repository
+git clone https://github.com/Yeti47/cryospy.git
+cd cryospy
+
+# Build server components (no OpenCV required)
+cd server/capture-server
+go mod tidy
+go build -tags release -ldflags "-s -w" -o capture-server .
+
+cd ../dashboard
+go mod tidy
+go build -tags release -ldflags "-s -w" -o dashboard .
+
+# Build capture client (requires OpenCV)
+cd ../../client/capture-client
+go mod tidy
+go build -ldflags "-s -w" -o capture-client .
 ```
+
+#### Step 3: Configure and Run
+
+```bash
+# Create configuration
+mkdir -p ~/cryospy
+cp server/config.example.json ~/cryospy/config.json
+# Edit ~/cryospy/config.json with your settings
+
+# Start services
+./server/capture-server/capture-server &
+./server/dashboard/dashboard &
+
+# Access dashboard at http://localhost:8080
+# Create your first client through the web interface
+```
+
+## Dependency Details
+
+### FFmpeg Requirement
+
+FFmpeg is required on **all machines** running CryoSpy components because:
+- CryoSpy spawns `ffmpeg` as external processes for video processing
+- Cannot be bundled as a DLL/library - must be installed as executable
+- Must be available in system PATH or same directory as CryoSpy binaries
+
+**Installation:**
+- **Linux**: `sudo apt install ffmpeg` or `sudo dnf install ffmpeg`
+- **Windows**: `choco install ffmpeg` or download from ffmpeg.org
+- **Linux AppImage**: Already bundled, no separate installation needed
+
+### OpenCV Requirement
+
+OpenCV is only required for:
+- **Building capture client from source** (development/compilation time)
+- **Not required for pre-built releases** (OpenCV libraries are statically linked or bundled)
+
+**Pre-built releases include:**
+- **Linux AppImage**: All OpenCV libraries bundled
+- **Windows releases**: All required OpenCV DLLs included
 
 ### Production Deployment
 
-For production deployments, especially when exposing the capture-server to the internet, consider:
+For production deployments, especially when exposing the capture-server to the internet:
 
 1. **Use release builds** with `-tags release` for optimized performance
 2. **Configure reverse proxy** (nginx/Apache) for HTTPS termination
 3. **Enable proxy authentication** for defense-in-depth security
-4. **Use automation scripts** available in the `scripts/` directory:
-   - `setup-nginx-proxy.ps1` - Windows nginx reverse proxy setup with configurable proxy authentication
-   - `install-server-linux.sh` - Linux server installation
-   - `install-client-linux.sh` - Linux client installation with configuration setup
-   - `install-server-windows.ps1` - Windows server installation with dependency management
-   - `install-client-windows.ps1` - Windows client installation with configuration setup
+4. **Use provided automation scripts** in the `scripts/` directory
 
-**Cross-Platform Installation Features:**
-- **Linux & Windows**: Interactive configuration setup with proxy authentication support
-- **Linux & Windows**: Command-line parameters for automated deployment
-- **Linux**: Systemd service installation options
-- **Windows**: Windows service installation options
-- **Windows**: Automated dependency installation via Chocolatey
-- **Windows**: Firewall configuration scripts
-
-**Example automated Linux client installation:**
-```bash
-# Install with all configuration in one command
-./install-client-linux.sh --server-url "https://yourdomain.com" --client-id "camera-01" --client-secret "secure-secret" --proxy-auth-header "X-Proxy-Auth" --proxy-auth-value "proxy-token" --with-systemd --force
-```
+**Available Installation Scripts:**
+- `install-server-linux.sh` - Linux server installation with dependency management
+- `install-server-windows.ps1` - Windows server installation with dependency management
+- `install-client-windows.ps1` - Windows client installation and configuration
+- `setup-nginx-proxy.sh` / `setup-nginx-proxy.ps1` - Nginx reverse proxy setup
 
 **Example automated Windows client installation:**
 ```powershell
-# Install with all configuration in one command
 .\install-client-windows.ps1 -ServerUrl "https://yourdomain.com" -ClientId "camera-01" -ClientSecret "secure-secret" -ProxyAuthHeader "X-Proxy-Auth" -ProxyAuthValue "proxy-token" -InstallAsService -SetupFirewall -Force
 ```
 
-**Example production client configuration with proxy auth:**
+**Example client configuration with proxy authentication:**
 ```json
 {
   "client_id": "camera-01",
@@ -397,8 +309,6 @@ For production deployments, especially when exposing the capture-server to the i
   "proxy_auth_value": "your-secure-proxy-token"
 }
 ```
-
-The proxy authentication provides an additional security layer when your capture-server is exposed to the internet through a reverse proxy. This way, unauthenticated requests can be rejected before even entering the app domain.
 
 ## Configuration
 
@@ -714,27 +624,28 @@ sudo usermod -a -G video $USER  # logout/login required
 ffmpeg -f v4l2 -i /dev/video0 -t 5 test.mp4
 ```
 
-### OpenCV Installation Issues
+### Dependency Issues
 
-**If using the Linux AppImage client:** No OpenCV installation required! The AppImage contains all dependencies.
+**Pre-built releases:** No dependency installation required! Installation scripts handle everything automatically.
 
-**If building from source:**
+**Building from source:**
 ```bash
-# Ubuntu/Debian
-sudo apt install libopencv-dev pkg-config
+# Linux: Install OpenCV development packages
+sudo apt install libopencv-dev pkg-config  # Ubuntu/Debian
+sudo dnf install opencv-devel pkgconf-pkg-config  # Fedora
 
-# Fedora
-sudo dnf install opencv-devel pkgconf-pkg-config
+# All platforms: Ensure FFmpeg is installed and in PATH
+ffmpeg -version  # Should show version information
 ```
 
-**For Ubuntu/Debian users encountering ArUco module issues:** Consider using the pre-built AppImage instead of building from source, as it includes all OpenCV contrib modules.
-
 ### Common Problems
-- **Camera in use**: Kill other processes using the camera with provided scripts
-- **FFmpeg errors**: Ensure FFmpeg is installed and in PATH
+- **Camera in use**: Kill other processes using the camera with provided scripts in `scripts/` directory
+- **FFmpeg errors**: Ensure FFmpeg is installed and accessible in PATH
 - **Database locked**: Check for multiple server instances running
 - **Upload failures**: Verify client credentials and server connectivity
-- **Codec issues**: On some Linux distributions (e.g., Fedora), FFmpeg may not include libx264 by default. Use "libopenh264" instead in your streaming and recording configuration
+- **Missing DLLs on Windows**: Ensure you extracted the complete release package
+- **ArUco module errors**: When building from source, ensure OpenCV is compiled with contrib modules. Install `libopencv-contrib-dev` (Ubuntu/Debian) or use `opencv-devel` on Fedora/RHEL (includes contrib modules by default), or build OpenCV from source with `-DOPENCV_EXTRA_MODULES_PATH=/path/to/opencv_contrib/modules`. For easier setup, consider using pre-built releases.
+- **Codec issues**: On some Linux distributions, use "libopenh264" instead of "libx264" in configuration
 
 ## Contributing
 
