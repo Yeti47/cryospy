@@ -5,7 +5,7 @@ on:
     tags: ['v*']
 
 jobs:
-  build-linux:
+  build-linux-server:
     runs-on: ubuntu-latest
     
     steps:
@@ -16,82 +16,17 @@ jobs:
       with:
         go-version: '1.24'
     
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential cmake git pkg-config ffmpeg \
-          libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev \
-          libtbb12 libtbb-dev \
-          libjpeg-dev libpng-dev libtiff-dev libdc1394-dev
-
-    - name: Cache OpenCV build and install
-      uses: actions/cache@v4
-      with:
-        path: |
-          opencv/build
-          /usr/local/include/opencv4
-          /usr/local/lib/libopencv*
-          /usr/local/lib/pkgconfig/opencv4.pc
-        key: opencv-${{ runner.os }}-4.9.0
-        restore-keys: |
-          opencv-${{ runner.os }}-
-
-    - name: Build OpenCV with contrib modules
-      run: |
-        OPENCV_VERSION=4.9.0
-        if [ ! -d "opencv/build" ] || [ ! -f "/usr/local/lib/pkgconfig/opencv4.pc" ]; then
-          git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git
-          git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git
-          mkdir -p opencv/build
-          cd opencv/build
-          cmake -D CMAKE_BUILD_TYPE=Release \
-                -D CMAKE_INSTALL_PREFIX=/usr/local \
-                -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-                -D BUILD_EXAMPLES=OFF \
-                -D BUILD_TESTS=OFF \
-                -D BUILD_PERF_TESTS=OFF \
-                -D BUILD_opencv_python3=OFF \
-                -D WITH_TBB=ON \
-                -D WITH_FFMPEG=ON \
-                ..
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-        else
-          echo "OpenCV build and install found in cache, skipping build."
-        fi
-
-    - name: Verify ArUco module is available
-      run: |
-        if [ -f "/usr/local/include/opencv4/opencv2/aruco/dictionary.hpp" ]; then
-          echo "✅ ArUco module found."
-        else
-          echo "❌ ArUco module missing. Failing build."
-          exit 1
-        fi
-
-
-    - name: Set PKG_CONFIG_PATH for custom OpenCV
-      run: echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig" >> $GITHUB_ENV
-
     - name: Build capture-server
       run: |
         cd server/capture-server
         go mod tidy
-        CGO_ENABLED=1 go build -tags release -ldflags "-s -w" -o capture-server .
+        CGO_ENABLED=0 go build -tags release -ldflags "-s -w" -o capture-server .
         
     - name: Build dashboard
       run: |
         cd server/dashboard
         go mod tidy
-        CGO_ENABLED=1 go build -tags release -ldflags "-s -w" -o dashboard .
-        
-    - name: Build capture-client
-      run: |
-        cd client/capture-client
-        go mod tidy
-        CGO_ENABLED=1 go build -ldflags "-s -w" -o capture-client .
+        CGO_ENABLED=0 go build -tags release -ldflags "-s -w" -o dashboard .
         
     - name: Package Linux server binaries
       run: |
@@ -104,23 +39,138 @@ jobs:
         chmod +x release/server-linux/*
         tar -czf cryospy-server-linux-amd64.tar.gz -C release/server-linux .
         
-    - name: Package Linux client binaries
-      run: |
-        mkdir -p release/client-linux
-        cp client/capture-client/capture-client release/client-linux/
-        cp client/capture-client/config.example.json release/client-linux/
-        cp scripts/install-client-linux.sh release/client-linux/
-        cp scripts/kill-camera-processes.sh release/client-linux/
-        chmod +x release/client-linux/*
-        tar -czf cryospy-client-linux-amd64.tar.gz -C release/client-linux .
-        
-    - name: Upload Linux artifacts
+    - name: Upload Linux server artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: cryospy-linux-amd64
-        path: |
-          cryospy-server-linux-amd64.tar.gz
-          cryospy-client-linux-amd64.tar.gz
+        name: cryospy-server-linux-amd64
+        path: cryospy-server-linux-amd64.tar.gz
+
+  build-linux-client-appimage:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        dnf update -y
+        dnf install -y golang opencv-devel pkgconf-pkg-config ffmpeg ffmpeg-devel \
+                       desktop-file-utils file wget fuse fuse-libs
+    
+    - name: Build capture-client
+      run: |
+        cd client/capture-client
+        go mod tidy
+        CGO_ENABLED=1 go build -ldflags "-s -w" -o capture-client .
+        
+    - name: Download AppImageTool
+      run: |
+        wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+        chmod +x appimagetool
+        
+    - name: Create AppDir structure
+      run: |
+        mkdir -p AppDir/usr/bin
+        mkdir -p AppDir/usr/share/applications
+        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+        
+    - name: Copy binaries and scripts
+      run: |
+        cp client/capture-client/capture-client AppDir/usr/bin/
+        cp client/capture-client/config.example.json AppDir/usr/bin/
+        cp scripts/configure-client.sh AppDir/usr/bin/
+        chmod +x AppDir/usr/bin/configure-client.sh
+        
+    - name: Create desktop file
+      run: |
+        cat > AppDir/usr/share/applications/cryospy-capture-client.desktop << 'EOF'
+        [Desktop Entry]
+        Type=Application
+        Name=CryoSpy Capture Client
+        Comment=Video capture client for CryoSpy surveillance system
+        Exec=capture-client
+        Icon=cryospy-capture-client
+        Categories=AudioVideo;Video;
+        Terminal=true
+        EOF
+        
+    - name: Create icon and AppRun script
+      run: |
+        # Copy the actual logo as the icon
+        cp resources/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/cryospy-capture-client.png
+        
+        # Create AppRun script that handles --configure flag
+        cat > AppDir/AppRun << 'EOF'
+        #!/bin/bash
+        SELF=$(readlink -f "$0")
+        HERE=${SELF%/*}
+        export PATH="${HERE}/usr/bin/:${PATH}"
+        cd "${HERE}/usr/bin"
+
+        # Handle special arguments
+        if [ "$1" = "--configure" ]; then
+            shift
+            exec "${HERE}/usr/bin/configure-client.sh" "$@"
+        elif [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+            echo "CryoSpy Capture Client AppImage"
+            echo ""
+            echo "Usage:"
+            echo "  $0                    Start the capture client"
+            echo "  $0 --configure        Run configuration setup"
+            echo "  $0 --help            Show this help"
+            echo ""
+            echo "The client requires a config.json file in the current directory."
+            echo "Use --configure to create one interactively."
+            exit 0
+        else
+            # Check if config.json exists
+            if [ ! -f "config.json" ]; then
+                echo "❌ config.json not found in current directory"
+                echo ""
+                echo "Please run configuration first:"
+                echo "  $0 --configure"
+                echo ""
+                echo "Or copy config.example.json to config.json and edit it:"
+                echo "  cp \"${HERE}/usr/bin/config.example.json\" config.json"
+                exit 1
+            fi
+            exec "${HERE}/usr/bin/capture-client" "$@"
+        fi
+        EOF
+        chmod +x AppDir/AppRun
+        
+    - name: Finalize AppDir
+      run: |
+        # Copy desktop file and icon to root of AppDir
+        cp AppDir/usr/share/applications/cryospy-capture-client.desktop AppDir/
+        cp AppDir/usr/share/icons/hicolor/256x256/apps/cryospy-capture-client.png AppDir/
+        
+    - name: Build and verify AppImage
+      run: |
+        # Build AppImage
+        ./appimagetool AppDir cryospy-capture-client-linux-x86_64.AppImage
+        
+        # Verify AppImage was created and is executable
+        if [ ! -f "cryospy-capture-client-linux-x86_64.AppImage" ]; then
+            echo "❌ AppImage creation failed"
+            exit 1
+        fi
+        
+        chmod +x cryospy-capture-client-linux-x86_64.AppImage
+        
+        # Test basic functionality
+        ./cryospy-capture-client-linux-x86_64.AppImage --help || echo "⚠️ Help command failed, but AppImage was created"
+        
+        echo "✅ AppImage created successfully"
+        ls -la cryospy-capture-client-linux-x86_64.AppImage
+        
+    - name: Upload Linux client AppImage
+      uses: actions/upload-artifact@v4
+      with:
+        name: cryospy-client-linux-appimage
+        path: cryospy-capture-client-linux-x86_64.AppImage
 
   build-windows:
     runs-on: windows-latest
@@ -140,7 +190,7 @@ jobs:
         
     - name: Install OpenCV and FFmpeg
       run: |
-        C:\vcpkg\vcpkg.exe install opencv:x64-windows ffmpeg:x64-windows
+        C:\vcpkg\vcpkg.exe install opencv[contrib]:x64-windows ffmpeg:x64-windows
         
     - name: Set environment variables
       run: |
@@ -200,7 +250,7 @@ jobs:
           cryospy-client-windows-amd64.zip
 
   create-release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux-server, build-linux-client-appimage, build-windows]
     runs-on: ubuntu-latest
     
     steps:
@@ -213,16 +263,18 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          cryospy-linux-amd64/cryospy-server-linux-amd64.tar.gz
-          cryospy-linux-amd64/cryospy-client-linux-amd64.tar.gz
+          cryospy-server-linux-amd64/cryospy-server-linux-amd64.tar.gz
+          cryospy-client-linux-appimage/cryospy-capture-client-linux-x86_64.AppImage
           cryospy-windows-amd64/cryospy-server-windows-amd64.zip
           cryospy-windows-amd64/cryospy-client-windows-amd64.zip
         body: |
           ## CryoSpy Release ${{ github.ref_name }}
           
           ### Components Available
-          - **Server Package**: Contains capture-server and dashboard components
-          - **Client Package**: Contains capture-client for video capture machines
+          - **Server Package (Linux)**: Contains capture-server and dashboard components
+          - **Server Package (Windows)**: Contains capture-server and dashboard components  
+          - **Client Package (Windows)**: Contains capture-client for video capture machines
+          - **Client AppImage (Linux)**: Universal Linux client with all dependencies included
           
           ### Linux Installation
           
@@ -234,27 +286,38 @@ jobs:
           ./install-server-linux.sh --with-systemd
           ```
           
-          **Client Installation:**
+          **Client Installation (AppImage):**
           ```bash
-          tar -xzf cryospy-client-linux-amd64.tar.gz
-          cd cryospy-client-linux-amd64
-          chmod +x install-client-linux.sh
-          ./install-client-linux.sh --with-systemd
+          # Download the AppImage
+          wget https://github.com/Yeti47/cryospy/releases/download/${{ github.ref_name }}/cryospy-capture-client-linux-x86_64.AppImage
+          
+          # Make it executable
+          chmod +x cryospy-capture-client-linux-x86_64.AppImage
+          
+          # Run configuration setup (interactive)
+          ./cryospy-capture-client-linux-x86_64.AppImage --configure
+          
+          # Or run directly (config.json must exist in current directory)
+          ./cryospy-capture-client-linux-x86_64.AppImage
           ```
           
-          **Automated Installation Examples:**
+          **Client Installation (Traditional):**
+          The AppImage also supports traditional installation by extracting to a directory:
+          ```bash
+          # Extract AppImage contents
+          ./cryospy-capture-client-linux-x86_64.AppImage --appimage-extract
+          
+          # Move to desired location
+          sudo mv squashfs-root /opt/cryospy-client
+          
+          # Create symlink or run directly
+          sudo ln -s /opt/cryospy-client/AppRun /usr/local/bin/cryospy-client
+          ```
+          
+          **Automated Server Installation:**
           ```bash
           # Server with systemd services
           ./install-server-linux.sh --with-systemd --force
-          
-          # Client with full configuration and systemd
-          ./install-client-linux.sh --server-url "https://cryospy.yourdomain.com" --client-id "camera-001" --client-secret "secret" --proxy-auth-header "X-CryoSpy-Auth" --proxy-auth-value "your-secret-key" --with-systemd --force
-          ```
-          
-          **Troubleshooting Camera Issues:**
-          ```bash
-          # If camera is blocked by other processes
-          ./kill-camera-processes.sh
           ```
           
           ### Windows Installation
@@ -282,9 +345,18 @@ jobs:
           .\install-client-windows.ps1 -ServerUrl "https://cryospy.yourdomain.com" -ClientId "camera-001" -ClientSecret "secret" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key" -InstallAsService
           ```
           
+          ### Benefits of AppImage Distribution (Linux Client)
+          
+          - **Universal Compatibility**: Works on all major Linux distributions
+          - **No Dependency Issues**: All OpenCV contrib modules (including ArUco) are bundled
+          - **Easy Installation**: Single executable file, no package management required
+          - **Portable**: Can run from any location without installation
+          - **Self-Contained**: No conflicts with system OpenCV installations
+          
           ### Configuration
-          - Server and client configurations are automatically created during installation
-          - Configuration files are placed in the user's home directory: `~/cryospy/config.json`
+          - Server configurations are automatically created during installation
+          - Linux client AppImage supports both interactive configuration and config file setup
+          - Configuration files are placed in the current working directory when using AppImage
           - See the included config.example.json files for reference
           - **Proxy Authentication**: Both server and client support configurable proxy authentication for enhanced security
           
@@ -299,10 +371,21 @@ jobs:
           ```
           
           **On Client Machines:**
+          
+          *Linux (AppImage):*
+          ```bash
+          # Interactive setup on first run
+          ./cryospy-capture-client-linux-x86_64.AppImage --configure
+          
+          # Then start normally
+          ./cryospy-capture-client-linux-x86_64.AppImage
+          ```
+          
+          *Windows:*
           ```bash
           # Configuration is set up during installation
           # Just start the client after installation
-          ./capture-client
+          ./capture-client.exe
           ```
           
           ### Security Features
@@ -311,6 +394,33 @@ jobs:
           - **Configurable trusted proxies** for production deployments
           - **Automatic client disabling** after authentication failures
           - **Rate limiting** and **HTTPS enforcement** via nginx proxy setup
+          
+          ### Troubleshooting
+          
+          **Linux AppImage Issues:**
+          ```bash
+          # If AppImage won't run, try extracting and running manually
+          ./cryospy-capture-client-linux-x86_64.AppImage --appimage-extract
+          cd squashfs-root
+          ./AppRun
+          
+          # For camera permission issues
+          sudo usermod -a -G video $USER
+          # Then log out and back in
+          
+          # Check camera availability
+          ls -la /dev/video*
+          ```
+          
+          **Windows Client Issues:**
+          ```powershell
+          # If OpenCV DLLs are missing after extraction
+          # Ensure all DLLs from the zip are in the same directory as capture-client.exe
+          
+          # For camera access issues
+          # Check Windows Camera privacy settings
+          # Ensure no other applications are using the camera
+          ```
         draft: false
         prerelease: false
       env:
