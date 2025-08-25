@@ -126,6 +126,7 @@ jobs:
         SELF=$(readlink -f "$0")
         HERE=${SELF%/*}
         export PATH="${HERE}/usr/bin/:${PATH}"
+        export LD_LIBRARY_PATH="${HERE}/usr/bin:${LD_LIBRARY_PATH}"
 
         # Handle special arguments
         if [ "$1" = "--configure" ]; then
