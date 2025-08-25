@@ -149,8 +149,11 @@ jobs:
         
     - name: Build and verify AppImage
       run: |
-        # Build AppImage
-        ./appimagetool AppDir cryospy-capture-client-linux-x86_64.AppImage
+        # Extract AppImageTool since FUSE may not work in container
+        ./appimagetool --appimage-extract
+        
+        # Build AppImage using extracted tool
+        ./squashfs-root/AppRun AppDir cryospy-capture-client-linux-x86_64.AppImage
         
         # Verify AppImage was created and is executable
         if [ ! -f "cryospy-capture-client-linux-x86_64.AppImage" ]; then
@@ -160,8 +163,8 @@ jobs:
         
         chmod +x cryospy-capture-client-linux-x86_64.AppImage
         
-        # Test basic functionality
-        ./cryospy-capture-client-linux-x86_64.AppImage --help || echo "⚠️ Help command failed, but AppImage was created"
+        # Test basic functionality using extract-and-run (works without FUSE)
+        ./cryospy-capture-client-linux-x86_64.AppImage --appimage-extract-and-run --help || echo "⚠️ Help command failed, but AppImage was created"
         
         echo "✅ AppImage created successfully"
         ls -la cryospy-capture-client-linux-x86_64.AppImage
