@@ -171,11 +171,16 @@ sudo apt install -y libopencv-dev libopencv-contrib-dev pkg-config ffmpeg
 
 **Note:** On Ubuntu/Debian, installing OpenCV via `libopencv-dev` and `libopencv-contrib-dev` may not provide all required modules (such as ArUco) for CryoSpy. If you encounter build errors related to missing OpenCV types (e.g., ArUco), you will need to build OpenCV from source with contrib modules enabled.
 
+
 **Building OpenCV from source (with contrib modules):**
 ```bash
 # Install build dependencies
 sudo apt update
-sudo apt install -y build-essential cmake git pkg-config ffmpeg libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev
+sudo apt install -y \
+  build-essential cmake git pkg-config ffmpeg \
+  libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev \
+  libtbb12 libtbb-dev \
+  libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev
 
 # Download OpenCV and contrib sources
 OPENCV_VERSION=4.9.0
