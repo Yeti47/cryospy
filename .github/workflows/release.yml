@@ -324,9 +324,22 @@ jobs:
         copy client\capture-client\capture-client.exe release\client-windows\
         copy client\capture-client\config.example.json release\client-windows\
         copy scripts\install-client-windows.ps1 release\client-windows\
-        # Copy required DLLs from OpenCV and FFmpeg installations
-        copy C:\opencv\build\x64\vc16\bin\*.dll release\client-windows\ 2>$null || echo "Some OpenCV DLLs not found, continuing..."
-        copy C:\tools\ffmpeg\bin\*.dll release\client-windows\ 2>$null || echo "Some FFmpeg DLLs not found, continuing..."
+        # Copy all OpenCV DLLs from common build output directories
+        $opencvDllDirs = @('C:\opencv\build\bin', 'C:\opencv\build\install\x64\mingw\bin', 'C:\opencv\build\x64\vc16\bin')
+        foreach ($dir in $opencvDllDirs) {
+          if (Test-Path $dir) {
+            Get-ChildItem -Path $dir -Filter 'opencv_*.dll' -ErrorAction SilentlyContinue | ForEach-Object {
+              Copy-Item -Path $_.FullName -Destination 'release\client-windows\' -Force
+              Write-Host "Copied: $($_.FullName)"
+            }
+          }
+        }
+        # Copy FFmpeg DLLs from Chocolatey installation to client directory (if present)
+        if (Test-Path 'C:\tools\ffmpeg\bin') {
+          Get-ChildItem 'C:\tools\ffmpeg\bin' -Filter '*.dll' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item -Path $_.FullName -Destination 'release\client-windows\' -Force }
+        } else {
+          Write-Host "⚠️ C:\tools\ffmpeg\bin not found; skipping FFmpeg DLL copy"
+        }
         
     - name: Create Windows packages
       run: |
