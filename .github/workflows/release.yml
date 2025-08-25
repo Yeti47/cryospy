@@ -87,7 +87,6 @@ jobs:
         chmod +x AppDir/usr/bin/configure-client.sh
 
         # Copy all required OpenCV .so libraries into AppDir/usr/bin
-        # Try common Fedora/RHEL locations first, fallback to /usr/lib if needed
         OPENCV_SO_SRC=""
         if [ -d "/usr/lib64" ]; then
           OPENCV_SO_SRC="/usr/lib64"
@@ -98,9 +97,18 @@ jobs:
           cp $OPENCV_SO_SRC/libopencv_*.so* AppDir/usr/bin/ 2>/dev/null || true
         fi
 
+        # Copy all shared library dependencies of capture-client using ldd
+        echo "Copying all shared library dependencies of capture-client..."
+        ldd AppDir/usr/bin/capture-client | awk '/=> \/.*\.so/{print $3}' | while read -r lib; do
+          if [ -f "$lib" ]; then
+            cp "$lib" AppDir/usr/bin/
+            echo "Copied: $lib"
+          fi
+        done
+
         # Optionally, print out what was copied for debugging
-        echo "OpenCV .so files in AppDir/usr/bin:"
-        ls -l AppDir/usr/bin/libopencv_*.so* || echo "No OpenCV .so files found"
+        echo "All .so files in AppDir/usr/bin:"
+        ls -l AppDir/usr/bin/*.so* || echo "No .so files found"
         
     - name: Create desktop file
       run: |
