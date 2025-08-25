@@ -110,12 +110,12 @@ jobs:
         SELF=$(readlink -f "$0")
         HERE=${SELF%/*}
         export PATH="${HERE}/usr/bin/:${PATH}"
-        cd "${HERE}/usr/bin"
 
         # Handle special arguments
         if [ "$1" = "--configure" ]; then
             shift
-            exec "${HERE}/usr/bin/configure-client.sh" "$@"
+            # Run configure-client.sh in the user's current working directory
+            exec bash "${HERE}/usr/bin/configure-client.sh" "$@"
         elif [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
             echo "CryoSpy Capture Client AppImage"
             echo ""
@@ -128,7 +128,7 @@ jobs:
             echo "Use --configure to create one interactively."
             exit 0
         else
-            # Check if config.json exists
+            # Check if config.json exists in the user's current directory
             if [ ! -f "config.json" ]; then
                 echo "❌ config.json not found in current directory"
                 echo ""
@@ -139,6 +139,7 @@ jobs:
                 echo "  cp \"${HERE}/usr/bin/config.example.json\" config.json"
                 exit 1
             fi
+            # Run capture-client from AppImage, but in user's working directory
             exec "${HERE}/usr/bin/capture-client" "$@"
         fi
         EOF

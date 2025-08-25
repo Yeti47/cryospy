@@ -16,9 +16,10 @@ echo "================================================"
 create_config_file() {
     echo "📝 Creating client configuration..."
     
-    # Check if config.json already exists
-    if [ -f "config.json" ] && [ "$FORCE" != true ]; then
-        read -p "config.json already exists. Overwrite? (y/N): " overwrite
+    # Always write config.json to user's working directory
+    CONFIG_PATH="$PWD/config.json"
+    if [ -f "$CONFIG_PATH" ] && [ "$FORCE" != true ]; then
+        read -p "config.json already exists in $PWD. Overwrite? (y/N): " overwrite
         if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
             echo "⏭️  Skipping configuration file creation"
             return
@@ -56,8 +57,8 @@ create_config_file() {
         fi
     fi
     
-    # Create configuration file
-    cat > config.json << EOF
+    # Create configuration file in user's working directory
+    cat > "$CONFIG_PATH" << EOF
 {
   "client_id": "$CLIENT_ID",
   "client_secret": "$CLIENT_SECRET",
@@ -71,7 +72,7 @@ create_config_file() {
 }
 EOF
     
-    echo "✅ Configuration file created: config.json"
+    echo "✅ Configuration file created: $CONFIG_PATH"
     
     if [ -n "$PROXY_AUTH_HEADER" ] && [ -n "$PROXY_AUTH_VALUE" ]; then
         echo "🔐 Proxy authentication configured for defense-in-depth security"
