@@ -59,21 +59,8 @@ jobs:
     - name: Install dependencies
       run: |
         dnf update -y
-
-        # List all .so files before installing runtime dependencies
-        find /usr/lib /usr/lib64 /lib /lib64 -type f -name '*.so*' > /tmp/sofiles-before.txt
-
-        # Install only runtime dependencies first
-        dnf install -y opencv-devel pkgconf-pkg-config ffmpeg
-
-        # List all .so files after installing runtime dependencies
-        find /usr/lib /usr/lib64 /lib /lib64 -type f -name '*.so*' > /tmp/sofiles-after.txt
-
-        # Compute the delta: new .so files introduced by runtime dependencies
-        comm -13 <(sort /tmp/sofiles-before.txt) <(sort /tmp/sofiles-after.txt) > /tmp/sofiles-delta.txt
-
-        # Now install build-time dependencies
-        dnf install -y golang gcc gcc-c++ desktop-file-utils file wget fuse fuse-libs
+        dnf install -y golang gcc gcc-c++ opencv-devel pkgconf-pkg-config ffmpeg \
+                       desktop-file-utils file wget fuse fuse-libs pax-utils
     
     - name: Build capture-client
       run: |
@@ -101,14 +88,14 @@ jobs:
 
 
 
-        # Copy only new .so files introduced by dependency installation
-        echo "Copying new shared libraries introduced by dependencies..."
-        while read -r lib; do
-          if [ -f "$lib" ]; then
+        # Use lddtree to discover and copy all required shared libraries for capture-client
+        echo "Discovering and copying all required shared libraries using lddtree..."
+        lddtree -l AppDir/usr/bin/capture-client | while read -r lib; do
+          if [ -f "$lib" ] && [[ "$lib" == *.so* ]]; then
             cp -n "$lib" AppDir/usr/bin/
             echo "Copied: $lib"
           fi
-        done < /tmp/sofiles-delta.txt
+        done
 
         # Optionally, print out what was copied for debugging
         echo "All .so files in AppDir/usr/bin:"
