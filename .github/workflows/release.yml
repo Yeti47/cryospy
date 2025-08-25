@@ -19,7 +19,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libopencv-dev pkg-config ffmpeg
+        sudo apt-get install -y libopencv-dev libopencv-aruco-dev pkg-config ffmpeg
         
     - name: Build capture-server
       run: |

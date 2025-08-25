@@ -165,7 +165,7 @@ The proxy authentication headers are automatically included in all API requests 
 #### Ubuntu/Debian:
 ```bash
 sudo apt update
-sudo apt install -y libopencv-dev pkg-config ffmpeg
+sudo apt install -y libopencv-dev libopencv-aruco-dev pkg-config ffmpeg
 ```
 
 #### Fedora/CentOS/RHEL:
