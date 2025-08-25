@@ -271,13 +271,13 @@ FFmpeg is required on **all machines** running CryoSpy components because:
 
 ### OpenCV Requirement
 
-OpenCV is only required for:
-- **Building capture client from source** (development/compilation time)
-- **Not required for pre-built releases** (OpenCV libraries are statically linked or bundled)
+OpenCV is a runtime dependency for the capture client. The GoCV bindings require the OpenCV shared libraries (Linux: `.so` files, Windows: `.dll` files) to be present at runtime.
 
-**Pre-built releases include:**
-- **Linux AppImage**: All OpenCV libraries bundled
-- **Windows releases**: All required OpenCV DLLs included
+**Pre-built releases** bundle all required OpenCV libraries, so users do not need to install OpenCV themselves:
+  - **Linux AppImage**: All OpenCV `.so` libraries are bundled inside the AppImage
+  - **Windows releases**: All required OpenCV `.dll` files are included in the release package
+
+If you build the capture client from source, you need to install the OpenCV development libraries and ensure the runtime libraries are available on your system.
 
 ### Production Deployment
 
