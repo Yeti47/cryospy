@@ -152,8 +152,8 @@ jobs:
         # Extract AppImageTool since FUSE may not work in container
         ./appimagetool --appimage-extract
         
-        # Build AppImage using extracted tool
-        ./squashfs-root/AppRun AppDir cryospy-capture-client-linux-x86_64.AppImage
+        # Build AppImage using extracted tool with explicit architecture
+        ARCH=x86_64 ./squashfs-root/AppRun AppDir cryospy-capture-client-linux-x86_64.AppImage
         
         # Verify AppImage was created and is executable
         if [ ! -f "cryospy-capture-client-linux-x86_64.AppImage" ]; then
