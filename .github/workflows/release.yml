@@ -290,35 +290,24 @@ jobs:
         # Ensure target directory exists
         if (!(Test-Path release\server-windows)) { New-Item -ItemType Directory -Path release\server-windows | Out-Null }
 
-        Write-Host "Listing C:\opencv directory for debugging..."
-        if (Test-Path 'C:\opencv') {
-          Get-ChildItem -Path 'C:\opencv' -Recurse -Force -ErrorAction SilentlyContinue | Select-Object -First 40 | ForEach-Object { Write-Host $_.FullName }
-        } else {
-          Write-Host "C:\opencv not present"
-        }
+        Write-Host "Listing all DLLs under C:\opencv for debugging..."
+        Get-ChildItem -Path 'C:\opencv' -Recurse -Filter '*.dll' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
 
-        # Find and copy OpenCV world DLL(s) anywhere under C:\opencv
-        $opencvWorld = Get-ChildItem -Path 'C:\opencv' -Recurse -ErrorAction SilentlyContinue -Filter 'opencv_world4*.dll'
-        if ($opencvWorld) {
-          Write-Host "Found OpenCV world DLL(s):"
-          $opencvWorld | ForEach-Object { Write-Host " - " + $_.FullName; Copy-Item -Path $_.FullName -Destination 'release\server-windows\' -Force }
-        } else {
-          Write-Host "No opencv_world DLLs found under C:\opencv"
-        }
-
-        # Find and copy OpenCV videoio/ffmpeg DLL(s)
-        $opencvVideoio = Get-ChildItem -Path 'C:\opencv' -Recurse -ErrorAction SilentlyContinue -Filter 'opencv_videoio_ffmpeg4*.dll'
-        if ($opencvVideoio) {
-          Write-Host "Found OpenCV videoio/ffmpeg DLL(s):"
-          $opencvVideoio | ForEach-Object { Write-Host " - " + $_.FullName; Copy-Item -Path $_.FullName -Destination 'release\server-windows\' -Force }
-        } else {
-          Write-Host "No opencv_videoio_ffmpeg DLLs found under C:\opencv"
+        # Copy all OpenCV DLLs from common build output directories
+        $opencvDllDirs = @('C:\opencv\build\bin', 'C:\opencv\build\install\x64\mingw\bin', 'C:\opencv\build\x64\vc16\bin')
+        foreach ($dir in $opencvDllDirs) {
+          if (Test-Path $dir) {
+            Get-ChildItem -Path $dir -Filter 'opencv_*.dll' -ErrorAction SilentlyContinue | ForEach-Object {
+              Copy-Item -Path $_.FullName -Destination 'release\server-windows\' -Force
+              Write-Host "Copied: $($_.FullName)"
+            }
+          }
         }
 
         # Fail early if no OpenCV DLLs were copied
-        $copied = Get-ChildItem -Path 'release\server-windows' -Filter 'opencv_world4*.dll' -ErrorAction SilentlyContinue
+        $copied = Get-ChildItem -Path 'release\server-windows' -Filter 'opencv_*.dll' -ErrorAction SilentlyContinue
         if (-not $copied) {
-          Write-Host "❌ No OpenCV DLLs were copied to release\server-windows. Please ensure OpenCV was built or cache restored correctly. Listing C:\opencv contents above."
+          Write-Host "❌ No OpenCV DLLs were copied to release\server-windows. Please ensure OpenCV was built or cache restored correctly."
           exit 1
         }
 
