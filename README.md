@@ -180,7 +180,7 @@ sudo apt install -y \
   build-essential cmake git pkg-config ffmpeg \
   libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev \
   libtbb12 libtbb-dev \
-  libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev
+  libjpeg-dev libpng-dev libtiff-dev libdc1394-dev
 
 # Download OpenCV and contrib sources
 OPENCV_VERSION=4.9.0
