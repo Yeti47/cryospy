@@ -86,7 +86,9 @@ jobs:
         cp scripts/configure-client.sh AppDir/usr/bin/
         chmod +x AppDir/usr/bin/configure-client.sh
 
-        # Copy all required OpenCV .so libraries into AppDir/usr/bin
+
+
+        # Copy only OpenCV .so libraries into AppDir/usr/bin
         OPENCV_SO_SRC=""
         if [ -d "/usr/lib64" ]; then
           OPENCV_SO_SRC="/usr/lib64"
@@ -97,12 +99,15 @@ jobs:
           cp $OPENCV_SO_SRC/libopencv_*.so* AppDir/usr/bin/ 2>/dev/null || true
         fi
 
-        # Copy all shared library dependencies of capture-client using ldd
-        echo "Copying all shared library dependencies of capture-client..."
+        # Copy only non-system shared library dependencies of capture-client using ldd
+        echo "Copying non-system shared library dependencies of capture-client..."
         ldd AppDir/usr/bin/capture-client | awk '/=> \/.*\.so/{print $3}' | while read -r lib; do
-          if [ -f "$lib" ]; then
+          # Only copy if not in /lib or /lib64 (system libraries)
+          if [ -f "$lib" ] && [[ ! "$lib" =~ ^/lib/ ]] && [[ ! "$lib" =~ ^/lib64/ ]]; then
             cp "$lib" AppDir/usr/bin/
             echo "Copied: $lib"
+          else
+            echo "Skipped system lib: $lib"
           fi
         done
 
