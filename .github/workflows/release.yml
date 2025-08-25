@@ -456,28 +456,12 @@ jobs:
           .\install-client-windows.ps1 -ServerUrl "https://cryospy.yourdomain.com" -ClientId "camera-001" -ClientSecret "secret" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key" -InstallAsService
           ```
           
-          ### Benefits of AppImage Distribution (Linux Client)
-          
-          - **Universal Compatibility**: Works on all major Linux distributions
-          - **No Dependency Issues**: All OpenCV contrib modules (including ArUco) are bundled
-          - **Easy Installation**: Single executable file, no package management required
-          - **Portable**: Can run from any location without installation
-          - **Self-Contained**: No conflicts with system OpenCV installations
-          
-          ### Benefits of Bundled Dependencies (Windows Client)
-          
-          - **Zero Dependencies**: All OpenCV DLLs are included in the release package
-          - **Guaranteed Compatibility**: Built with the exact OpenCV version used by gocv
-          - **No Compilation Required**: End users don't need Visual Studio or build tools
-          - **Simplified Installation**: Just extract and run the installation script
-          
           ### Configuration
           - Server configurations are automatically created during installation
-          - Linux client AppImage supports both interactive configuration and config file setup
-          - Configuration files are placed in the current working directory when using AppImage
+          - Linux client AppImage supports interactive config generation
           - See the included config.example.json files for reference
           - **Proxy Authentication**: Both server and client support configurable proxy authentication for enhanced security
-          
+                    
           ### Quick Start
           
           **On Server Machine:**
@@ -506,44 +490,6 @@ jobs:
           ./capture-client.exe
           ```
           
-          ### Security Features
-          - **End-to-end encryption** ensures video data is encrypted at rest, and additionally in transit if using HTTPS
-          - **Proxy authentication** support for defense-in-depth security
-          - **Configurable trusted proxies** for production deployments
-          - **Automatic client disabling** after authentication failures
-          - **Rate limiting** and **HTTPS enforcement** via nginx proxy setup
-          
-          ### Troubleshooting
-          
-          **Linux AppImage Issues:**
-          ```bash
-          # If AppImage won't run, try extracting and running manually
-          ./cryospy-capture-client-linux-x86_64.AppImage --appimage-extract
-          cd squashfs-root
-          ./AppRun
-          
-          # For camera permission issues
-          sudo usermod -a -G video $USER
-          # Then log out and back in
-          
-          # Check camera availability
-          ls -la /dev/video*
-          ```
-          
-          **Windows Client Issues:**
-          ```powershell
-          # All required DLLs are bundled with the release package
-          # If you encounter DLL errors, ensure you extracted the complete package
-          
-          # For camera access issues
-          # Check Windows Camera privacy settings
-          # Ensure no other applications are using the camera
-          
-          # FFmpeg-related features (optional)
-          # If advanced video processing features don't work:
-          choco install ffmpeg
-          # or manually install FFmpeg and add to PATH
-          ```
         draft: false
         prerelease: false
       env:
