@@ -16,11 +16,61 @@ jobs:
       with:
         go-version: '1.24'
     
-    - name: Install dependencies
+    - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libopencv-dev libopencv-contrib-dev pkg-config ffmpeg
-        
+        sudo apt-get install -y build-essential cmake git pkg-config ffmpeg libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev
+
+    - name: Cache OpenCV build and install
+      uses: actions/cache@v4
+      with:
+        path: |
+          opencv/build
+          /usr/local/include/opencv4
+          /usr/local/lib/libopencv*
+          /usr/local/lib/pkgconfig/opencv4.pc
+        key: opencv-${{ runner.os }}-4.9.0
+        restore-keys: |
+          opencv-${{ runner.os }}-
+
+    - name: Build OpenCV with contrib modules
+      run: |
+        OPENCV_VERSION=4.9.0
+        if [ ! -d "opencv/build" ] || [ ! -f "/usr/local/lib/pkgconfig/opencv4.pc" ]; then
+          git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git
+          git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git
+          mkdir -p opencv/build
+          cd opencv/build
+          cmake -D CMAKE_BUILD_TYPE=Release \
+                -D CMAKE_INSTALL_PREFIX=/usr/local \
+                -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+                -D BUILD_EXAMPLES=OFF \
+                -D BUILD_TESTS=OFF \
+                -D BUILD_PERF_TESTS=OFF \
+                -D BUILD_opencv_python3=OFF \
+                -D WITH_TBB=ON \
+                -D WITH_FFMPEG=ON \
+                ..
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+        else
+          echo "OpenCV build and install found in cache, skipping build."
+        fi
+
+    - name: Verify ArUco module is available
+      run: |
+        if [ -f "/usr/local/include/opencv4/opencv2/aruco/dictionary.hpp" ]; then
+          echo "✅ ArUco module found."
+        else
+          echo "❌ ArUco module missing. Failing build."
+          exit 1
+        fi
+
+
+    - name: Set PKG_CONFIG_PATH for custom OpenCV
+      run: echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig" >> $GITHUB_ENV
+
     - name: Build capture-server
       run: |
         cd server/capture-server

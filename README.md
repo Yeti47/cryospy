@@ -162,11 +162,50 @@ The proxy authentication headers are automatically included in all API requests 
 
 ### Dependencies Installation
 
+
 #### Ubuntu/Debian:
 ```bash
 sudo apt update
 sudo apt install -y libopencv-dev libopencv-contrib-dev pkg-config ffmpeg
 ```
+
+**Note:** On Ubuntu/Debian, installing OpenCV via `libopencv-dev` and `libopencv-contrib-dev` may not provide all required modules (such as ArUco) for CryoSpy. If you encounter build errors related to missing OpenCV types (e.g., ArUco), you will need to build OpenCV from source with contrib modules enabled.
+
+**Building OpenCV from source (with contrib modules):**
+```bash
+# Install build dependencies
+sudo apt update
+sudo apt install -y build-essential cmake git pkg-config ffmpeg libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev
+
+# Download OpenCV and contrib sources
+OPENCV_VERSION=4.9.0
+git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git
+git clone --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git
+mkdir -p opencv/build
+cd opencv/build
+
+# Configure and build
+cmake -D CMAKE_BUILD_TYPE=Release \
+      -D CMAKE_INSTALL_PREFIX=/usr/local \
+      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+      -D BUILD_EXAMPLES=OFF \
+      -D BUILD_TESTS=OFF \
+      -D BUILD_PERF_TESTS=OFF \
+      -D BUILD_opencv_python3=OFF \
+      -D WITH_TBB=ON \
+      -D WITH_FFMPEG=ON \
+      ..
+make -j$(nproc)
+sudo make install
+sudo ldconfig
+```
+
+After building, ensure `/usr/local/lib/pkgconfig` is in your `PKG_CONFIG_PATH`:
+```bash
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+```
+
+This will make the custom-built OpenCV available for Go builds.
 
 #### Fedora/CentOS/RHEL:
 ```bash
