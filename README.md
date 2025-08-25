@@ -227,10 +227,12 @@ chmod +x cryospy-capture-client-linux-x86_64.AppImage
 ### Dependencies Installation
 
 **⚠️ Important Runtime Dependencies:**
-- **FFmpeg**: Required on server and client machines for video processing
+- **FFmpeg**: Required on server and client machines for video processing (runtime only - no linking/compilation needed)
 - **OpenCV**: Only required for building capture client from source (not needed for AppImage)
 
 **The following build dependencies are only required for building from source:**
+
+> **Note**: FFmpeg is **not** required for building/compilation since CryoSpy uses external process execution rather than library linking. FFmpeg only needs to be available at runtime.
 
 
 #### Ubuntu/Debian (Building from Source):
@@ -238,13 +240,15 @@ chmod +x cryospy-capture-client-linux-x86_64.AppImage
 **For server components:**
 ```bash
 sudo apt update
-sudo apt install -y build-essential pkg-config ffmpeg
+sudo apt install -y build-essential pkg-config
+# Note: FFmpeg not needed for building - only required at runtime
 ```
 
 **For capture client (if not using AppImage):**
 ```bash
 sudo apt update
-sudo apt install -y libopencv-dev libopencv-contrib-dev pkg-config ffmpeg
+sudo apt install -y libopencv-dev libopencv-contrib-dev pkg-config
+# Note: FFmpeg not needed for building - only required at runtime
 ```
 
 **⚠️ Important:** On Ubuntu/Debian, the standard OpenCV packages may not include all required contrib modules (such as ArUco) needed by the capture client. **We recommend using the pre-built AppImage instead** which includes all dependencies.
@@ -258,6 +262,7 @@ sudo apt install -y \
   libgtk-3-dev libavcodec-dev libavformat-dev libswscale-dev \
   libtbb12 libtbb-dev \
   libjpeg-dev libpng-dev libtiff-dev libdc1394-dev
+# Note: FFmpeg and its dev libraries above are needed for OpenCV's video support during compilation
 
 # Download OpenCV and contrib sources
 OPENCV_VERSION=4.9.0
@@ -287,11 +292,11 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
 #### Fedora/CentOS/RHEL (Building from Source):
 ```bash
-# For server components
-sudo dnf install pkgconf-pkg-config ffmpeg
+# For server components (no FFmpeg needed for building)
+sudo dnf install pkgconf-pkg-config
 
 # For capture client (opencv-devel is required)
-sudo dnf install opencv-devel pkgconf-pkg-config ffmpeg
+sudo dnf install opencv-devel pkgconf-pkg-config
 ```
 
 **Note:** Fedora's `opencv-devel` package includes contrib modules by default, making it easier to build the capture client from source compared to Ubuntu/Debian.
@@ -307,6 +312,7 @@ C:\vcpkg\vcpkg.exe install opencv[contrib]:x64-windows ffmpeg:x64-windows
 set PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows\lib\pkgconfig
 set CGO_ENABLED=1
 
+# Note: FFmpeg DLLs are needed at runtime, not for linking during compilation
 # Ensure FFmpeg is in PATH for runtime
 set PATH=%PATH%;C:\vcpkg\installed\x64-windows\bin
 ```
@@ -315,7 +321,9 @@ set PATH=%PATH%;C:\vcpkg\installed\x64-windows\bin
 
 #### Runtime Dependencies (All Deployments)
 
-**FFmpeg must be installed on all server machines:**
+**FFmpeg must be installed on all machines running CryoSpy components (server or client):**
+
+> **Important**: FFmpeg is a runtime dependency only. CryoSpy does not link to FFmpeg libraries during compilation - instead, it spawns FFmpeg processes at runtime for video processing tasks.
 
 **Linux:**
 ```bash
