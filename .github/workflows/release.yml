@@ -59,8 +59,21 @@ jobs:
     - name: Install dependencies
       run: |
         dnf update -y
-        dnf install -y golang gcc gcc-c++ opencv-devel pkgconf-pkg-config ffmpeg \
-                       desktop-file-utils file wget fuse fuse-libs
+
+        # List all .so files before installing runtime dependencies
+        find /usr/lib /usr/lib64 /lib /lib64 -type f -name '*.so*' > /tmp/sofiles-before.txt
+
+        # Install only runtime dependencies first
+        dnf install -y opencv-devel pkgconf-pkg-config ffmpeg
+
+        # List all .so files after installing runtime dependencies
+        find /usr/lib /usr/lib64 /lib /lib64 -type f -name '*.so*' > /tmp/sofiles-after.txt
+
+        # Compute the delta: new .so files introduced by runtime dependencies
+        comm -13 <(sort /tmp/sofiles-before.txt) <(sort /tmp/sofiles-after.txt) > /tmp/sofiles-delta.txt
+
+        # Now install build-time dependencies
+        dnf install -y golang gcc gcc-c++ desktop-file-utils file wget fuse fuse-libs
     
     - name: Build capture-client
       run: |
@@ -88,33 +101,14 @@ jobs:
 
 
 
-        # Copy only OpenCV .so libraries into AppDir/usr/bin
-        OPENCV_SO_SRC=""
-        if [ -d "/usr/lib64" ]; then
-          OPENCV_SO_SRC="/usr/lib64"
-        elif [ -d "/usr/lib" ]; then
-          OPENCV_SO_SRC="/usr/lib"
-        fi
-        if [ -n "$OPENCV_SO_SRC" ]; then
-          cp $OPENCV_SO_SRC/libopencv_*.so* AppDir/usr/bin/ 2>/dev/null || true
-        fi
-
-        # Explicitly copy all libhdf5.so* files from /usr/lib64 to AppDir/usr/bin
-        if [ -d "/usr/lib64" ]; then
-          cp /usr/lib64/libhdf5.so* AppDir/usr/bin/ 2>/dev/null || true
-        fi
-
-        # Copy only non-system shared library dependencies of capture-client using ldd
-        echo "Copying non-system shared library dependencies of capture-client..."
-        ldd AppDir/usr/bin/capture-client | awk '/=> \/.*\.so/{print $3}' | while read -r lib; do
-          # Only copy if not in /lib or /lib64 (system libraries)
-          if [ -f "$lib" ] && [[ ! "$lib" =~ ^/lib/ ]] && [[ ! "$lib" =~ ^/lib64/ ]]; then
-            cp "$lib" AppDir/usr/bin/
+        # Copy only new .so files introduced by dependency installation
+        echo "Copying new shared libraries introduced by dependencies..."
+        while read -r lib; do
+          if [ -f "$lib" ]; then
+            cp -n "$lib" AppDir/usr/bin/
             echo "Copied: $lib"
-          else
-            echo "Skipped system lib: $lib"
           fi
-        done
+        done < /tmp/sofiles-delta.txt
 
         # Optionally, print out what was copied for debugging
         echo "All .so files in AppDir/usr/bin:"
