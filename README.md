@@ -247,7 +247,8 @@ sudo apt install -y build-essential pkg-config
 **For capture client (if not using AppImage):**
 ```bash
 sudo apt update
-sudo apt install -y libopencv-dev libopencv-contrib-dev pkg-config
+sudo apt install -y libopencv-dev libopencv-contrib-dev pkg-config build-essential
+# Note: build-essential provides gcc/g++ compilers needed for OpenCV CGO bindings
 # Note: FFmpeg not needed for building - only required at runtime
 ```
 
@@ -295,8 +296,8 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 # For server components (no FFmpeg needed for building)
 sudo dnf install pkgconf-pkg-config
 
-# For capture client (opencv-devel is required)
-sudo dnf install opencv-devel pkgconf-pkg-config
+# For capture client (requires C/C++ compilers for OpenCV CGO bindings)
+sudo dnf install gcc gcc-c++ opencv-devel pkgconf-pkg-config
 ```
 
 **Note:** Fedora's `opencv-devel` package includes contrib modules by default, making it easier to build the capture client from source compared to Ubuntu/Debian.

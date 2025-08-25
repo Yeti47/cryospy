@@ -56,7 +56,7 @@ jobs:
     - name: Install dependencies
       run: |
         dnf update -y
-        dnf install -y golang opencv-devel pkgconf-pkg-config ffmpeg \
+        dnf install -y golang gcc gcc-c++ opencv-devel pkgconf-pkg-config ffmpeg \
                        desktop-file-utils file wget fuse fuse-libs
     
     - name: Build capture-client
