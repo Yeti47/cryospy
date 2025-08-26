@@ -82,8 +82,16 @@ func (p *FfmpegPostProcessor) ProcessVideo(rawClip *recording.RawClip) (*VideoCl
 
 	// Apply grayscale filter if enabled
 	if settings.Grayscale {
-		filters = append(filters, "format=gray")
-		log.Printf("Applied grayscale filter")
+		// Use different grayscale methods based on codec compatibility
+		if codec == "libx264" {
+			// For H.264, use saturation-based grayscale that maintains YUV420P format
+			filters = append(filters, "hue=s=0")
+			log.Printf("Applied H.264-compatible grayscale filter (desaturation)")
+		} else {
+			// For other codecs (like H.265), use the standard gray format
+			filters = append(filters, "format=gray")
+			log.Printf("Applied standard grayscale filter")
+		}
 	}
 
 	// Apply downscaling if specified
@@ -110,7 +118,7 @@ func (p *FfmpegPostProcessor) ProcessVideo(rawClip *recording.RawClip) (*VideoCl
 	if codec == "libx264" {
 		trans.MediaFile().SetPreset("ultrafast")
 		trans.MediaFile().SetVideoProfile("baseline")
-		log.Printf("Applied H.264 optimizations: preset=ultrafast, profile=baseline")
+		log.Printf("Applied H.264 optimizations: preset=ultrafast profile=baseline")
 	}
 
 	// Run the transcoding
