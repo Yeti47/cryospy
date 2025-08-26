@@ -149,14 +149,18 @@ jobs:
         cp AppDir/usr/share/applications/cryospy-capture-client.desktop AppDir/
         cp AppDir/usr/share/icons/hicolor/256x256/apps/cryospy-capture-client.png AppDir/
         
-    - name: Build and verify AppImage
+    - name: Extract linuxdeploy AppImage
       run: |
-        # Build AppImage using linuxdeploy
-        ./linuxdeploy-x86_64.AppImage --appdir AppDir \
+        ./linuxdeploy-x86_64.AppImage --appimage-extract
+        mv squashfs-root linuxdeploy-extracted
+
+    - name: Build AppImage using extracted linuxdeploy
+      run: |
+        linuxdeploy-extracted/AppRun --appdir AppDir \
           -d AppDir/usr/share/applications/cryospy-capture-client.desktop \
           -i AppDir/usr/share/icons/hicolor/256x256/apps/cryospy-capture-client.png \
           --output appimage
-        
+
         # Find the generated AppImage and rename it to the expected name
         APPIMAGE=$(ls *.AppImage | head -n 1)
         TARGET_APPIMAGE="cryospy-capture-client-linux-x86_64.AppImage"
