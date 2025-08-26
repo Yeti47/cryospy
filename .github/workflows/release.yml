@@ -60,7 +60,7 @@ jobs:
       run: |
         dnf update -y
         dnf install -y golang gcc gcc-c++ opencv-devel pkgconf-pkg-config ffmpeg \
-                       desktop-file-utils file wget fuse fuse-libs pax-utils
+                       desktop-file-utils file wget fuse fuse-libs
     
     - name: Build capture-client
       run: |
@@ -86,23 +86,25 @@ jobs:
         cp scripts/configure-client.sh AppDir/usr/bin/
         chmod +x AppDir/usr/bin/configure-client.sh
 
-
-
-        # Use lddtree to discover and copy all required shared libraries for capture-client
-        echo "Discovering and copying all required shared libraries using lddtree..."
-        lddtree -l AppDir/usr/bin/capture-client | while read -r lib; do
-          if [ -f "$lib" ] && [[ "$lib" == *.so* ]]; then
-            cp -n "$lib" AppDir/usr/bin/
-            echo "Copied: $lib"
-          fi
+        # Explicitly copy OpenCV, libhdf5, and libtesseract .so files required by gocv and OCR
+        echo "Copying OpenCV, libhdf5, and libtesseract .so files..."
+        OPENCV_SO_DIR="/usr/lib64"
+        for sofile in $(ls $OPENCV_SO_DIR/libopencv_*.so* 2>/dev/null); do
+          cp -n "$sofile" AppDir/usr/bin/
+          echo "Copied: $sofile"
+        done
+        for sofile in $(ls $OPENCV_SO_DIR/libhdf5*.so* 2>/dev/null); do
+          cp -n "$sofile" AppDir/usr/bin/
+          echo "Copied: $sofile"
+        done
+        for sofile in $(ls $OPENCV_SO_DIR/libtesseract*.so* 2>/dev/null); do
+          cp -n "$sofile" AppDir/usr/bin/
+          echo "Copied: $sofile"
         done
 
         # Optionally, print out what was copied for debugging
-        echo "All .so files in AppDir/usr/bin:"
-        ls -l AppDir/usr/bin/*.so* || echo "No .so files found"
-        
-    - name: Create desktop file
-      run: |
+        echo "All relevant .so files in AppDir/usr/bin:"
+        ls -l AppDir/usr/bin/libopencv_*.so* AppDir/usr/bin/libhdf5*.so* AppDir/usr/bin/libtesseract*.so* || echo "No relevant .so files found"
         cat > AppDir/usr/share/applications/cryospy-capture-client.desktop << 'EOF'
         [Desktop Entry]
         Type=Application
