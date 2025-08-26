@@ -210,7 +210,7 @@ install_certbot() {
     echo -e "${GREEN}✅ Certbot installed${NC}"
 }
 
-# Function to create nginx configuration
+# Function to create nginx configuration (before SSL setup)
 create_nginx_config() {
     echo -e "${GREEN}📝 Creating nginx configuration...${NC}"
     
@@ -226,17 +226,18 @@ create_nginx_config() {
     if [[ -n "$PROXY_AUTH_HEADER" && -n "$PROXY_AUTH_VALUE" ]]; then
         # Convert header name to nginx variable format (lowercase, hyphens to underscores)
         local nginx_header_var="\$http_$(echo "$PROXY_AUTH_HEADER" | tr '[:upper:]' '[:lower:]' | tr '-' '_')"
-        proxy_auth_config="            # Require proxy authentication header
-            if ($nginx_header_var != \"$PROXY_AUTH_VALUE\") {
-                return 401 \"Unauthorized - Invalid or missing proxy authentication\";
-            }"
+        proxy_auth_config="        # Require proxy authentication header
+        if ($nginx_header_var != \"$PROXY_AUTH_VALUE\") {
+            return 401 \"Unauthorized - Invalid or missing proxy authentication\";
+        }"
     fi
     
-    # Create nginx configuration
+    # Create nginx configuration (certbot will add SSL configuration automatically)
     sudo tee "$config_file" > /dev/null <<EOF
 # CryoSpy Nginx Configuration
 # This configuration exposes ONLY the capture-server API to the internet
 # The dashboard remains accessible only locally
+# SSL configuration will be added automatically by certbot
 
 # Rate limiting
 limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
@@ -247,47 +248,15 @@ upstream capture_server {
     server 127.0.0.1:$CAPTURE_SERVER_PORT;
 }
 
-# HTTP server (will be configured by certbot for HTTPS redirect)
+# HTTP server (certbot will modify this to add SSL and redirects)
 server {
     listen $HTTP_PORT;
     server_name $DOMAIN;
-    
-    # Allow certbot to work
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
-    
-    # Redirect all other HTTP traffic to HTTPS (will be added by certbot)
-    location / {
-        return 301 https://\$server_name\$request_uri;
-    }
-}
-
-# HTTPS server for capture-server API only
-server {
-    listen $HTTPS_PORT ssl http2;
-    server_name $DOMAIN;
-    
-    # SSL certificates (will be configured by certbot)
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    
-    # Modern SSL configuration
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-    
-    # OCSP stapling
-    ssl_stapling on;
-    ssl_stapling_verify on;
     
     # Security headers
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
     add_header X-XSS-Protection "1; mode=block";
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     
     # Security: Only allow capture-server API endpoints
     # Block access to dashboard and other services
@@ -380,28 +349,40 @@ setup_ssl() {
     
     echo -e "${GREEN}🔒 Setting up SSL certificate with Let's Encrypt...${NC}"
     
-    # Run certbot
+    # Run certbot with nginx plugin (automatically modifies nginx config)
     if sudo certbot --nginx -d "$DOMAIN" --email "$EMAIL" --agree-tos --non-interactive --redirect; then
-        echo -e "${GREEN}✅ SSL certificate configured successfully${NC}"
+        echo -e "${GREEN}✅ SSL certificate obtained and nginx configured automatically${NC}"
         
-        # Set up automatic renewal
+        # Set up automatic renewal (certbot usually sets this up automatically, but let's ensure it)
         if ! sudo crontab -l 2>/dev/null | grep -q "certbot renew"; then
-            echo "0 12 * * * /usr/bin/certbot renew --quiet" | sudo crontab -
+            # Add renewal command
+            (sudo crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet") | sudo crontab -
             echo -e "${GREEN}✅ Auto-renewal configured${NC}"
+        fi
+        
+        # Add HSTS header manually since certbot doesn't add it
+        local config_file="/etc/nginx/sites-available/cryospy"
+        if ! sudo grep -q "Strict-Transport-Security" "$config_file"; then
+            # Add HSTS header to the HTTPS server block
+            sudo sed -i '/listen.*ssl/a\    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;' "$config_file"
+            sudo systemctl reload nginx
+            echo -e "${GREEN}✅ HSTS header added for enhanced security${NC}"
         fi
     else
         echo -e "${RED}❌ SSL certificate setup failed${NC}"
         echo -e "${YELLOW}Please check that:${NC}"
         echo "  1. Your domain $DOMAIN points to this server's public IP"
-        echo "  2. Ports 80 and 443 are open in your firewall"
-        echo "  3. No other web server is running on port 80"
+        echo "  2. Port 80 is open in your firewall (configured automatically for certbot)"
+        echo "  3. The domain is accessible from the internet"
+        echo "  4. No other process is blocking port 80"
+        echo "  5. Nginx is running and configuration is valid"
         exit 1
     fi
 }
 
-# Function to configure firewall (if ufw is available)
-configure_firewall() {
-    echo -e "${GREEN}🔥 Configuring firewall...${NC}"
+# Function to configure firewall for certbot (HTTP only)
+configure_firewall_for_certbot() {
+    echo -e "${GREEN}🔥 Configuring firewall for certbot (opening port 80)...${NC}"
     
     if command -v ufw &> /dev/null; then
         echo -e "${BLUE}Configuring UFW firewall...${NC}"
@@ -412,26 +393,46 @@ configure_firewall() {
         # Allow SSH (important!)
         sudo ufw allow ssh
         
-        # Allow HTTP and HTTPS
+        # Allow HTTP for certbot challenge
         sudo ufw allow $HTTP_PORT/tcp
-        sudo ufw allow $HTTPS_PORT/tcp
         
-        echo -e "${GREEN}✅ UFW firewall configured${NC}"
+        echo -e "${GREEN}✅ UFW firewall configured for certbot${NC}"
         sudo ufw status
     elif command -v firewall-cmd &> /dev/null; then
         echo -e "${BLUE}Configuring firewalld...${NC}"
         
-        # Allow HTTP and HTTPS
+        # Allow HTTP for certbot challenge
         sudo firewall-cmd --permanent --add-port=$HTTP_PORT/tcp
+        sudo firewall-cmd --reload
+        
+        echo -e "${GREEN}✅ Firewalld configured for certbot${NC}"
+    else
+        echo -e "${YELLOW}No recognized firewall found. Please manually open port $HTTP_PORT (HTTP) for certbot${NC}"
+    fi
+}
+
+# Function to configure firewall for HTTPS service
+configure_firewall_for_https() {
+    echo -e "${GREEN}🔥 Configuring firewall for HTTPS service (opening port $HTTPS_PORT)...${NC}"
+    
+    if command -v ufw &> /dev/null; then
+        echo -e "${BLUE}Adding HTTPS port to UFW firewall...${NC}"
+        
+        # Allow HTTPS
+        sudo ufw allow $HTTPS_PORT/tcp
+        
+        echo -e "${GREEN}✅ UFW firewall configured for HTTPS${NC}"
+        sudo ufw status
+    elif command -v firewall-cmd &> /dev/null; then
+        echo -e "${BLUE}Adding HTTPS port to firewalld...${NC}"
+        
+        # Allow HTTPS
         sudo firewall-cmd --permanent --add-port=$HTTPS_PORT/tcp
         sudo firewall-cmd --reload
         
-        echo -e "${GREEN}✅ Firewalld configured${NC}"
+        echo -e "${GREEN}✅ Firewalld configured for HTTPS${NC}"
     else
-        echo -e "${YELLOW}No recognized firewall found. Please manually configure:${NC}"
-        echo "  - Allow port $HTTP_PORT (HTTP)"
-        echo "  - Allow port $HTTPS_PORT (HTTPS)"
-        echo "  - Allow port 22 (SSH)"
+        echo -e "${YELLOW}No recognized firewall found. Please manually open port $HTTPS_PORT (HTTPS)${NC}"
     fi
 }
 
@@ -506,19 +507,28 @@ main() {
     install_nginx
     install_certbot
     
-    # Create configuration
+    # Configure firewall for certbot (port 80 only)
+    configure_firewall_for_certbot
+    
+    # Create nginx configuration
     create_nginx_config
     
-    # Setup SSL
+    # Setup SSL certificates (certbot will automatically modify nginx config)
     setup_ssl
     
-    # Configure firewall
-    configure_firewall
+    # Configure firewall for HTTPS service (port 443)
+    configure_firewall_for_https
     
     # Final message
     echo ""
     echo -e "${GREEN}🎉 Setup Complete!${NC}"
     echo -e "${GREEN}==================${NC}"
+    echo ""
+    echo -e "${YELLOW}Configuration Summary:${NC}"
+    echo "✅ Nginx installed and configured"
+    echo "✅ SSL certificate obtained and configured"
+    echo "✅ HTTPS-only configuration activated"
+    echo "✅ Automatic certificate renewal configured"
     echo ""
     echo -e "${YELLOW}Next steps:${NC}"
     echo "1. Ensure your CryoSpy capture-server is running on port $CAPTURE_SERVER_PORT"
@@ -537,8 +547,8 @@ main() {
     echo "• Dashboard is NOT exposed (remains local-only)"
     echo "• Only /api/ and /health endpoints are accessible"
     echo "• Rate limiting is configured for API endpoints"
-    echo "• HTTPS is enforced (HTTP redirects to HTTPS)"
-    echo "• SSL certificate will auto-renew"
+    echo "• HTTPS is enforced (HTTP automatically redirects to HTTPS)"
+    echo "• SSL certificate will auto-renew via certbot"
     
     echo ""
     echo -e "${YELLOW}To manage nginx:${NC}"
