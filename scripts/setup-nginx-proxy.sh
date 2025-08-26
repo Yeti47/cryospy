@@ -444,7 +444,7 @@ validate_inputs() {
     fi
     
     # Validate domain format
-    if [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}$ ]]; then
+    if [[ ! "$DOMAIN" =~ ^([a-zA-Z0-9]+(-[a-zA-Z0-9]+)*\.)+[a-zA-Z]{2,}$ ]]; then
         echo -e "${RED}Invalid domain format: $DOMAIN${NC}"
         exit 1
     fi
