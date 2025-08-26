@@ -70,8 +70,8 @@ jobs:
         
     - name: Download AppImageTool
       run: |
-        wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-        chmod +x appimagetool
+        wget -O linuxdeploy-x86_64.AppImage https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        chmod +x linuxdeploy-x86_64.AppImage
         
     - name: Create AppDir structure
       run: |
@@ -85,26 +85,6 @@ jobs:
         cp client/capture-client/config.example.json AppDir/usr/bin/
         cp scripts/configure-client.sh AppDir/usr/bin/
         chmod +x AppDir/usr/bin/configure-client.sh
-
-        # Explicitly copy OpenCV, libhdf5, and libtesseract .so files required by gocv and OCR
-        echo "Copying OpenCV, libhdf5, and libtesseract .so files..."
-        OPENCV_SO_DIR="/usr/lib64"
-        for sofile in $(ls $OPENCV_SO_DIR/libopencv_*.so* 2>/dev/null); do
-          cp -n "$sofile" AppDir/usr/bin/
-          echo "Copied: $sofile"
-        done
-        for sofile in $(ls $OPENCV_SO_DIR/libhdf5*.so* 2>/dev/null); do
-          cp -n "$sofile" AppDir/usr/bin/
-          echo "Copied: $sofile"
-        done
-        for sofile in $(ls $OPENCV_SO_DIR/libtesseract*.so* 2>/dev/null); do
-          cp -n "$sofile" AppDir/usr/bin/
-          echo "Copied: $sofile"
-        done
-
-        # Optionally, print out what was copied for debugging
-        echo "All relevant .so files in AppDir/usr/bin:"
-        ls -l AppDir/usr/bin/libopencv_*.so* AppDir/usr/bin/libhdf5*.so* AppDir/usr/bin/libtesseract*.so* || echo "No relevant .so files found"
         cat > AppDir/usr/share/applications/cryospy-capture-client.desktop << 'EOF'
         [Desktop Entry]
         Type=Application
@@ -171,25 +151,23 @@ jobs:
         
     - name: Build and verify AppImage
       run: |
-        # Extract AppImageTool since FUSE may not work in container
-        ./appimagetool --appimage-extract
+        # Build AppImage using linuxdeploy
+        ./linuxdeploy-x86_64.AppImage --appdir AppDir \
+          -d AppDir/usr/share/applications/cryospy-capture-client.desktop \
+          -i AppDir/usr/share/icons/hicolor/256x256/apps/cryospy-capture-client.png \
+          --output appimage
         
-        # Build AppImage using extracted tool with explicit architecture
-        ARCH=x86_64 ./squashfs-root/AppRun AppDir cryospy-capture-client-linux-x86_64.AppImage
-        
-        # Verify AppImage was created and is executable
-        if [ ! -f "cryospy-capture-client-linux-x86_64.AppImage" ]; then
-            echo "❌ AppImage creation failed"
-            exit 1
+        # Find the generated AppImage and rename it to the expected name
+        APPIMAGE=$(ls *.AppImage | head -n 1)
+        TARGET_APPIMAGE="cryospy-capture-client-linux-x86_64.AppImage"
+        if [ ! -f "$APPIMAGE" ]; then
+          echo "❌ AppImage creation failed"
+          exit 1
         fi
-        
-        chmod +x cryospy-capture-client-linux-x86_64.AppImage
-        
-        # Test basic functionality using extract-and-run (works without FUSE)
-        ./cryospy-capture-client-linux-x86_64.AppImage --appimage-extract-and-run --help || echo "⚠️ Help command failed, but AppImage was created"
-        
+        mv "$APPIMAGE" "$TARGET_APPIMAGE"
+        chmod +x "$TARGET_APPIMAGE"
         echo "✅ AppImage created successfully"
-        ls -la cryospy-capture-client-linux-x86_64.AppImage
+        ls -la "$TARGET_APPIMAGE"
         
     - name: Upload Linux client AppImage
       uses: actions/upload-artifact@v4
