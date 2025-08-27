@@ -102,13 +102,13 @@ func (s *captureServerClient) UploadClip(ctx context.Context, request UploadClip
 
 	// Add timestamp field - use the actual recording timestamp instead of upload time
 	if err := writer.WriteField("timestamp", request.RecordingTimestamp.UTC().Format(time.RFC3339)); err != nil {
-		return fmt.Errorf("failed to write timestamp field: %w", err)
+		return NewNonRecoverableUploadError(fmt.Errorf("failed to write timestamp field: %w", err))
 	}
 
 	// Add duration field using the known duration from client settings
 	durationStr := fmt.Sprintf("%.1f", request.Duration.Seconds())
 	if err := writer.WriteField("duration", durationStr); err != nil {
-		return fmt.Errorf("failed to write duration field: %w", err)
+		return NewNonRecoverableUploadError(fmt.Errorf("failed to write duration field: %w", err))
 	}
 
 	// Add has_motion field using the actual motion detection result
@@ -117,27 +117,27 @@ func (s *captureServerClient) UploadClip(ctx context.Context, request UploadClip
 		motionStr = "true"
 	}
 	if err := writer.WriteField("has_motion", motionStr); err != nil {
-		return fmt.Errorf("failed to write has_motion field: %w", err)
+		return NewNonRecoverableUploadError(fmt.Errorf("failed to write has_motion field: %w", err))
 	}
 
 	// Add file field
 	part, err := writer.CreateFormFile("video", "clip.mp4")
 	if err != nil {
-		return fmt.Errorf("failed to create form file: %w", err)
+		return NewNonRecoverableUploadError(fmt.Errorf("failed to create form file: %w", err))
 	}
 
 	if _, err := part.Write(request.VideoData); err != nil {
-		return fmt.Errorf("failed to write video data: %w", err)
+		return NewNonRecoverableUploadError(fmt.Errorf("failed to write video data: %w", err))
 	}
 
 	if err := writer.Close(); err != nil {
-		return fmt.Errorf("failed to close writer: %w", err)
+		return NewNonRecoverableUploadError(fmt.Errorf("failed to close writer: %w", err))
 	}
 
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, "POST", url, &buf)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return NewNonRecoverableUploadError(fmt.Errorf("failed to create request: %w", err))
 	}
 
 	// Add headers
@@ -147,13 +147,18 @@ func (s *captureServerClient) UploadClip(ctx context.Context, request UploadClip
 	// Make request
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
+		// this is a recoverable error, because it could be a temporary network issue
+		return NewRecoverableUploadError(fmt.Errorf("failed to make request: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+
+		// client-side errors are not recoverable (the problem won't go away by retrying)
+		isRecoverable := !(resp.StatusCode >= 400 && resp.StatusCode < 500)
+
+		return NewUploadServerError(isRecoverable, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	return nil

@@ -3,6 +3,7 @@ package uploading
 import (
 	"context"
 	"log"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -142,7 +143,7 @@ func (s *uploadQueue) uploadClip(job *UploadJob, stopChan <-chan struct{}, succe
 		log.Printf("Failed to upload %s (attempt %d): %v", job.FilePath, job.RetryCount+1, err)
 
 		// Check if we should retry
-		if job.RetryCount < s.maxRetries {
+		if job.RetryCount < s.maxRetries && client.IsRecoverableUploadError(err) {
 			s.activeRetriesMu.Lock()
 			if s.activeRetries < s.retryBufferSize {
 				s.activeRetries++
@@ -157,6 +158,11 @@ func (s *uploadQueue) uploadClip(job *UploadJob, stopChan <-chan struct{}, succe
 						s.activeRetries--
 						s.activeRetriesMu.Unlock()
 					}()
+					// add jitter to avoid retry storms
+					baseDelay := time.Duration(s.retryMinutes) * time.Minute
+					jitter := time.Duration(rand.Intn(16)) * time.Second
+					retryDelay := baseDelay + jitter
+
 					select {
 					case <-stopChan:
 						log.Printf("Shutdown requested, dropping retry for %s", job.FilePath)
@@ -164,7 +170,7 @@ func (s *uploadQueue) uploadClip(job *UploadJob, stopChan <-chan struct{}, succe
 							failureCallback(job)
 						}
 						return
-					case <-time.After(time.Duration(s.retryMinutes) * time.Minute):
+					case <-time.After(retryDelay):
 						// Retry after sleep
 					}
 					// Only retry if not shutting down
@@ -187,8 +193,16 @@ func (s *uploadQueue) uploadClip(job *UploadJob, stopChan <-chan struct{}, succe
 				}
 			}
 		} else {
-			// Max retries exceeded, call failure callback
-			log.Printf("Max retries exceeded for %s, giving up", job.FilePath)
+
+			// check again why not retrying
+			if client.IsRecoverableUploadError(err) {
+				// Max retries exceeded
+				log.Printf("Max retries exceeded for %s, giving up", job.FilePath)
+			} else {
+				// Non-recoverable error, no point in retrying
+				log.Printf("Non-recoverable error for %s, not retrying", job.FilePath)
+			}
+
 			if failureCallback != nil {
 				failureCallback(job)
 			}
