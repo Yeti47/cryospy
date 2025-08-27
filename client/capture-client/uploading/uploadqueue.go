@@ -47,7 +47,7 @@ func NewUploadQueue(serverClient client.CaptureServerClient, bufferSize int, ret
 	}
 }
 
-// QueueUpload adds an upload job to the queue
+// Queue adds an upload job to the queue
 func (s *uploadQueue) Queue(job *UploadJob) bool {
 	select {
 	case s.uploadQueue <- job:
