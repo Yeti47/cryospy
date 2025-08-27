@@ -13,10 +13,13 @@ type Config struct {
 	ServerURL            string `json:"server_url"`
 	CameraDevice         string `json:"camera_device"`
 	BufferSize           int    `json:"buffer_size"`            // Number of clips to buffer in memory
+	RetryBufferSize      int    `json:"retry_buffer_size"`      // Number of failed clips to buffer for retry
 	SettingsSyncSeconds  int    `json:"settings_sync_seconds"`  // How often to sync settings from server (in seconds)
 	ServerTimeoutSeconds int    `json:"server_timeout_seconds"` // HTTP timeout for server requests (in seconds)
 	ProxyAuthHeader      string `json:"proxy_auth_header"`      // Optional header name for proxy authentication (e.g., "X-Proxy-Auth")
 	ProxyAuthValue       string `json:"proxy_auth_value"`       // Optional header value for proxy authentication
+	UploadRetryMinutes   int    `json:"upload_retry_minutes"`   // Minutes to wait before retrying failed uploads
+	UploadMaxRetries     *int   `json:"upload_max_retries"`     // Maximum number of retry attempts before giving up (nil = use default, 0 = disable retries)
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -25,16 +28,20 @@ func LoadConfig(filename string) (*Config, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Config file doesn't exist, create a default one
+			defaultMaxRetries := 3
 			defaultConfig := &Config{
 				ClientID:             "your-client-id",
 				ClientSecret:         "your-client-secret",
 				ServerURL:            "http://localhost:8080",
 				CameraDevice:         "/dev/video0",
-				BufferSize:           3,
-				SettingsSyncSeconds:  300, // 5 minutes default
-				ServerTimeoutSeconds: 30,  // 30 seconds default
-				ProxyAuthHeader:      "",  // Optional proxy auth header name
-				ProxyAuthValue:       "",  // Optional proxy auth header value
+				BufferSize:           5,                  // Small buffer for immediate uploads
+				RetryBufferSize:      100,                // Larger buffer for failed uploads during outages
+				SettingsSyncSeconds:  300,                // 5 minutes default
+				ServerTimeoutSeconds: 30,                 // 30 seconds default
+				ProxyAuthHeader:      "",                 // Optional proxy auth header name
+				ProxyAuthValue:       "",                 // Optional proxy auth header value
+				UploadRetryMinutes:   5,                  // Retry failed uploads after 5 minutes
+				UploadMaxRetries:     &defaultMaxRetries, // Try up to 3 times before giving up
 			}
 			if err := saveConfig(filename, defaultConfig); err != nil {
 				return nil, fmt.Errorf("failed to create default config file: %w", err)
@@ -55,13 +62,23 @@ func LoadConfig(filename string) (*Config, error) {
 		config.CameraDevice = "/dev/video0"
 	}
 	if config.BufferSize == 0 {
-		config.BufferSize = 3
+		config.BufferSize = 5 // Updated default
+	}
+	if config.RetryBufferSize == 0 {
+		config.RetryBufferSize = 100 // Larger default for retry buffer
 	}
 	if config.SettingsSyncSeconds == 0 {
 		config.SettingsSyncSeconds = 300 // 5 minutes default
 	}
 	if config.ServerTimeoutSeconds == 0 {
 		config.ServerTimeoutSeconds = 30 // 30 seconds default
+	}
+	if config.UploadRetryMinutes == 0 {
+		config.UploadRetryMinutes = 5 // 5 minutes default
+	}
+	if config.UploadMaxRetries == nil {
+		defaultMaxRetries := 3
+		config.UploadMaxRetries = &defaultMaxRetries // 3 retries default
 	}
 
 	return &config, nil
@@ -74,8 +91,11 @@ type ConfigOverrides struct {
 	ServerURL            *string
 	CameraDevice         *string
 	BufferSize           *int
+	RetryBufferSize      *int
 	SettingsSyncSeconds  *int
 	ServerTimeoutSeconds *int
+	UploadRetryMinutes   *int
+	UploadMaxRetries     *int
 }
 
 // Override allows overriding specific configuration values using ConfigOverrides struct
@@ -95,11 +115,20 @@ func (c *Config) Override(overrides ConfigOverrides) {
 	if overrides.BufferSize != nil && *overrides.BufferSize > 0 {
 		c.BufferSize = *overrides.BufferSize
 	}
+	if overrides.RetryBufferSize != nil && *overrides.RetryBufferSize > 0 {
+		c.RetryBufferSize = *overrides.RetryBufferSize
+	}
 	if overrides.SettingsSyncSeconds != nil && *overrides.SettingsSyncSeconds > 0 {
 		c.SettingsSyncSeconds = *overrides.SettingsSyncSeconds
 	}
 	if overrides.ServerTimeoutSeconds != nil && *overrides.ServerTimeoutSeconds > 0 {
 		c.ServerTimeoutSeconds = *overrides.ServerTimeoutSeconds
+	}
+	if overrides.UploadRetryMinutes != nil && *overrides.UploadRetryMinutes > 0 {
+		c.UploadRetryMinutes = *overrides.UploadRetryMinutes
+	}
+	if overrides.UploadMaxRetries != nil && *overrides.UploadMaxRetries >= 0 {
+		c.UploadMaxRetries = overrides.UploadMaxRetries
 	}
 }
 

@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -98,7 +99,7 @@ func (p *ClientSettingsProvider) fetchSettingsAsync() {
 	settings, err := p.client.GetClientSettings(ctx)
 	if err != nil {
 		// Log error but don't update cache - keep using stale settings
-		// TODO: Add proper logging here
+		log.Printf("Failed to fetch client settings from server: %v", err)
 		return
 	}
 

@@ -424,12 +424,55 @@ Each capture client uses a local JSON configuration file:
   "server_url": "http://localhost:8081",
   "camera_device": "/dev/video0",
   "buffer_size": 5,
+  "retry_buffer_size": 100,
   "settings_sync_seconds": 300,
   "server_timeout_seconds": 30,
+  "upload_retry_minutes": 5,
+  "upload_max_retries": 3,
   "proxy_auth_header": "X-Proxy-Auth",
   "proxy_auth_value": "your-proxy-secret"
 }
 ```
+
+#### Upload Retry Configuration
+
+CryoSpy includes intelligent retry logic for handling temporary server outages:
+
+- **`upload_retry_minutes`** (default: 5): Minutes to wait before retrying failed uploads
+- **`upload_max_retries`** (default: 3): Maximum number of retry attempts before giving up
+  - Set to `0` to disable retries entirely (uploads are dropped immediately on failure)
+  - Set to `null` or omit to use the default value of 3
+- **`buffer_size`** (default: 5): Number of clips to buffer for immediate upload
+- **`retry_buffer_size`** (default: 100): Number of failed clips to buffer for retry during server outages
+
+**Example retry configurations:**
+
+**Retries disabled:**
+```json
+{
+  "upload_max_retries": 0
+}
+```
+
+**Extended retry for unreliable connections:**
+```json
+{
+  "upload_retry_minutes": 10,
+  "upload_max_retries": 5,
+  "retry_buffer_size": 200
+}
+```
+
+**Default behavior (retries enabled):**
+```json
+{
+  "upload_retry_minutes": 5,
+  "upload_max_retries": 3,
+  "retry_buffer_size": 100
+}
+```
+
+During server outages, failed uploads are automatically retried after the configured delay. If all retries are exhausted, the video files are automatically cleaned up to prevent disk space accumulation.
 
 #### Optional Proxy Authentication
 The `proxy_auth_header` and `proxy_auth_value` fields enable additional authentication when your capture-server is deployed behind a reverse proxy (such as nginx) that requires custom authentication headers. This provides a defense-in-depth security model:

@@ -10,5 +10,7 @@ type UploadJob struct {
 	HasMotion          bool
 	Duration           time.Duration
 	RecordingTimestamp time.Time
-	Format             string // Video format (e.g., "mp4", "avi") for MIME type determination
+	Format             string    // Video format (e.g., "mp4", "avi") for MIME type determination
+	RetryCount         int       // Number of retry attempts made
+	NextRetryTime      time.Time // When to retry next (for failed uploads)
 }

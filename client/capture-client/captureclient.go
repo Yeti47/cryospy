@@ -76,11 +76,19 @@ func (c *CaptureClient) Start() error {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	// Start upload service with success callback to cleanup files
+	// Start upload service with success and failure callbacks to cleanup files
 	c.wg.Add(1)
-	go c.uploadQueue.Start(c.shutdownChan, &c.wg, func(job *uploading.UploadJob) {
-		c.fileTracker.DeleteFile(job.FilePath)
-	})
+	go c.uploadQueue.Start(c.shutdownChan, &c.wg,
+		func(job *uploading.UploadJob) {
+			// Success callback - delete file after successful upload
+			c.fileTracker.DeleteFile(job.FilePath)
+		},
+		func(job *uploading.UploadJob) {
+			// Failure callback - delete file after all retries exhausted
+			log.Printf("Upload permanently failed for %s, cleaning up file", job.FilePath)
+			c.fileTracker.DeleteFile(job.FilePath)
+		},
+	)
 
 	// Start recording with callback
 	started, err := c.recorder.StartRecording(c.onRawClipReady, c.onRecordingError)

@@ -109,7 +109,14 @@ func main() {
 	// Create post-processor with codec provider
 	postProcessor := postprocessing.NewFfmpegPostProcessor(postProcessingSettingsProvider, codecProvider)
 	fileTracker := filemanagement.NewLocalFileTracker(tempDir)
-	uploadQueue := uploading.NewUploadQueue(serverClient, cfg.BufferSize, time.Duration(cfg.ServerTimeoutSeconds)*time.Second+5*time.Second)
+	uploadQueue := uploading.NewUploadQueue(
+		serverClient,
+		cfg.BufferSize,
+		cfg.RetryBufferSize,
+		time.Duration(cfg.ServerTimeoutSeconds)*time.Second+5*time.Second,
+		cfg.UploadRetryMinutes,
+		*cfg.UploadMaxRetries, // Dereference the pointer since we know it's not nil after LoadConfig
+	)
 
 	// Create capture client
 	captureClient := NewCaptureClient(
