@@ -160,15 +160,15 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 			filtered := false
 			var filterReason string
 
-			if area <= float64(minArea) {
+			if area < float64(minArea) {
 				filtered = true
-				filterReason = fmt.Sprintf("area %.2f <= minArea %d", area, minArea)
-			} else if rect.Dx() <= minWidth {
+				filterReason = fmt.Sprintf("area %.2f < minArea %d", area, minArea)
+			} else if rect.Dx() < minWidth {
 				filtered = true
-				filterReason = fmt.Sprintf("width %d <= minWidth %d", rect.Dx(), minWidth)
-			} else if rect.Dy() <= minHeight {
+				filterReason = fmt.Sprintf("width %d < minWidth %d", rect.Dx(), minWidth)
+			} else if rect.Dy() < minHeight {
 				filtered = true
-				filterReason = fmt.Sprintf("height %d <= minHeight %d", rect.Dy(), minHeight)
+				filterReason = fmt.Sprintf("height %d < minHeight %d", rect.Dy(), minHeight)
 			} else if aspectRatio < minAspect {
 				filtered = true
 				filterReason = fmt.Sprintf("aspectRatio %.2f < minAspect %.2f", aspectRatio, minAspect)
