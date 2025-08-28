@@ -38,6 +38,7 @@ func NewGoCVMotionDetector(provider config.SettingsProvider[MotionDetectionSetti
 }
 
 func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
+
 	// Get the latest settings for this operation.
 	// The provider is responsible for its own thread safety.
 	settings := d.settingsProvider.GetSettings()
@@ -110,6 +111,18 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 		maxAspect = DefaultMotionDetectionSettings.MotionMaxAspect
 	}
 
+	log.Printf(
+		"Starting motion detection on video '%s': minArea = %d, maxFramesToCheck = %d, warmUpFrames = %d, minWidth = %d, minHeight = %d, minAspect = %.2f, maxAspect = %.2f",
+		videoPath,
+		minArea,
+		maxFramesToCheck,
+		warmUpFrames,
+		minWidth,
+		minHeight,
+		minAspect,
+		maxAspect,
+	)
+
 	for frameCount < maxFramesToCheck {
 		if ok := video.Read(&img); !ok {
 			break
@@ -152,6 +165,9 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 
 		contours := gocv.FindContours(thresh, gocv.RetrievalExternal, gocv.ChainApproxSimple)
 
+		// log the number of contours found
+		log.Printf("Frame %d: Found %d contours", frameCount, contours.Size())
+
 		for i := 0; i < contours.Size(); i++ {
 			area := gocv.ContourArea(contours.At(i))
 			rect := gocv.BoundingRect(contours.At(i))
@@ -193,6 +209,8 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 		}
 		frameCount++
 	}
+
+	log.Printf("Finished motion detection on video: %s - Motion Detected: %t", videoPath, motionDetected)
 
 	return motionDetected, nil
 }
