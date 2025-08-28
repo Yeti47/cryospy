@@ -62,6 +62,12 @@ func (r *SQLiteClientRepository) createTables() error {
 		motion_warm_up_frames INTEGER NOT NULL DEFAULT 30,
 		capture_codec TEXT NOT NULL DEFAULT 'MJPG',
 		capture_frame_rate REAL NOT NULL DEFAULT 15.0
+		, motion_min_width INTEGER NOT NULL DEFAULT 20
+		, motion_min_height INTEGER NOT NULL DEFAULT 20
+		, motion_min_aspect REAL NOT NULL DEFAULT 0.3
+		, motion_max_aspect REAL NOT NULL DEFAULT 3.0
+		, motion_mog_history INTEGER NOT NULL DEFAULT 500
+		, motion_mog_var_thresh REAL NOT NULL DEFAULT 16.0
 	);`
 
 	_, err := r.db.Exec(createClientsTable)
@@ -83,6 +89,12 @@ func (r *SQLiteClientRepository) createTables() error {
 	db.AddColumn(r.db, "clients", "motion_warm_up_frames", "INTEGER NOT NULL DEFAULT 30")
 	db.AddColumn(r.db, "clients", "capture_codec", "TEXT NOT NULL DEFAULT 'MJPG'")
 	db.AddColumn(r.db, "clients", "capture_frame_rate", "REAL NOT NULL DEFAULT 15.0")
+	db.AddColumn(r.db, "clients", "motion_min_width", "INTEGER NOT NULL DEFAULT 20")
+	db.AddColumn(r.db, "clients", "motion_min_height", "INTEGER NOT NULL DEFAULT 20")
+	db.AddColumn(r.db, "clients", "motion_min_aspect", "REAL NOT NULL DEFAULT 0.3")
+	db.AddColumn(r.db, "clients", "motion_max_aspect", "REAL NOT NULL DEFAULT 3.0")
+	db.AddColumn(r.db, "clients", "motion_mog_history", "INTEGER NOT NULL DEFAULT 500")
+	db.AddColumn(r.db, "clients", "motion_mog_var_thresh", "REAL NOT NULL DEFAULT 16.0")
 
 	return nil
 }
@@ -94,6 +106,7 @@ func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Clien
 		is_disabled, clip_duration_seconds, motion_only, grayscale, downscale_resolution,
 		output_format, output_codec, video_bitrate,
 		motion_min_area, motion_max_frames, motion_warm_up_frames,
+		motion_min_width, motion_min_height, motion_min_aspect, motion_max_aspect, motion_mog_history, motion_mog_var_thresh,
 		capture_codec, capture_frame_rate
 	FROM clients WHERE id = ?`
 
@@ -107,6 +120,7 @@ func (r *SQLiteClientRepository) GetByID(ctx context.Context, id string) (*Clien
 		&client.IsDisabled, &client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
 		&client.OutputFormat, &client.OutputCodec, &client.VideoBitRate,
 		&client.MotionMinArea, &client.MotionMaxFrames, &client.MotionWarmUpFrames,
+		&client.MotionMinWidth, &client.MotionMinHeight, &client.MotionMinAspect, &client.MotionMaxAspect, &client.MotionMogHistory, &client.MotionMogVarThresh,
 		&client.CaptureCodec, &client.CaptureFrameRate,
 	)
 	if err != nil {
@@ -137,6 +151,7 @@ func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) 
 		is_disabled, clip_duration_seconds, motion_only, grayscale, downscale_resolution,
 		output_format, output_codec, video_bitrate,
 		motion_min_area, motion_max_frames, motion_warm_up_frames,
+		motion_min_width, motion_min_height, motion_min_aspect, motion_max_aspect, motion_mog_history, motion_mog_var_thresh,
 		capture_codec, capture_frame_rate
 	FROM clients ORDER BY created_at DESC`
 
@@ -156,6 +171,7 @@ func (r *SQLiteClientRepository) GetAll(ctx context.Context) ([]*Client, error) 
 			&client.IsDisabled, &client.ClipDurationSeconds, &client.MotionOnly, &client.Grayscale, &client.DownscaleResolution,
 			&client.OutputFormat, &client.OutputCodec, &client.VideoBitRate,
 			&client.MotionMinArea, &client.MotionMaxFrames, &client.MotionWarmUpFrames,
+			&client.MotionMinWidth, &client.MotionMinHeight, &client.MotionMinAspect, &client.MotionMaxAspect, &client.MotionMogHistory, &client.MotionMogVarThresh,
 			&client.CaptureCodec, &client.CaptureFrameRate,
 		)
 		if err != nil {
@@ -186,8 +202,9 @@ func (r *SQLiteClientRepository) Create(ctx context.Context, client *Client) err
 		is_disabled, clip_duration_seconds, motion_only, grayscale, downscale_resolution,
 		output_format, output_codec, video_bitrate,
 		motion_min_area, motion_max_frames, motion_warm_up_frames,
+		motion_min_width, motion_min_height, motion_min_aspect, motion_max_aspect, motion_mog_history, motion_mog_var_thresh,
 		capture_codec, capture_frame_rate)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.ExecContext(ctx, query,
 		client.ID, client.SecretHash, client.SecretSalt,
@@ -196,6 +213,7 @@ func (r *SQLiteClientRepository) Create(ctx context.Context, client *Client) err
 		client.IsDisabled, client.ClipDurationSeconds, client.MotionOnly, client.Grayscale, client.DownscaleResolution,
 		client.OutputFormat, client.OutputCodec, client.VideoBitRate,
 		client.MotionMinArea, client.MotionMaxFrames, client.MotionWarmUpFrames,
+		client.MotionMinWidth, client.MotionMinHeight, client.MotionMinAspect, client.MotionMaxAspect, client.MotionMogHistory, client.MotionMogVarThresh,
 		client.CaptureCodec, client.CaptureFrameRate,
 	)
 	if err != nil {
@@ -214,6 +232,7 @@ func (r *SQLiteClientRepository) Update(ctx context.Context, client *Client) err
 		clip_duration_seconds = ?, motion_only = ?, grayscale = ?, downscale_resolution = ?,
 		output_format = ?, output_codec = ?, video_bitrate = ?,
 		motion_min_area = ?, motion_max_frames = ?, motion_warm_up_frames = ?,
+		motion_min_width = ?, motion_min_height = ?, motion_min_aspect = ?, motion_max_aspect = ?, motion_mog_history = ?, motion_mog_var_thresh = ?,
 		capture_codec = ?, capture_frame_rate = ?
 	WHERE id = ?`
 
@@ -223,6 +242,7 @@ func (r *SQLiteClientRepository) Update(ctx context.Context, client *Client) err
 		client.ClipDurationSeconds, client.MotionOnly, client.Grayscale, client.DownscaleResolution,
 		client.OutputFormat, client.OutputCodec, client.VideoBitRate,
 		client.MotionMinArea, client.MotionMaxFrames, client.MotionWarmUpFrames,
+		client.MotionMinWidth, client.MotionMinHeight, client.MotionMinAspect, client.MotionMaxAspect, client.MotionMogHistory, client.MotionMogVarThresh,
 		client.CaptureCodec, client.CaptureFrameRate,
 		client.ID,
 	)

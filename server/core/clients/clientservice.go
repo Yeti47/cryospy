@@ -25,6 +25,12 @@ type CreateClientRequest struct {
 	MotionMinArea         int
 	MotionMaxFrames       int
 	MotionWarmUpFrames    int
+	MotionMinWidth        int
+	MotionMinHeight       int
+	MotionMinAspect       float64
+	MotionMaxAspect       float64
+	MotionMogHistory      int
+	MotionMogVarThresh    float64
 	CaptureCodec          string
 	CaptureFrameRate      float64
 }
@@ -42,6 +48,12 @@ type UpdateClientSettingsRequest struct {
 	MotionMinArea         int
 	MotionMaxFrames       int
 	MotionWarmUpFrames    int
+	MotionMinWidth        int
+	MotionMinHeight       int
+	MotionMinAspect       float64
+	MotionMaxAspect       float64
+	MotionMogHistory      int
+	MotionMogVarThresh    float64
 	CaptureCodec          string
 	CaptureFrameRate      float64
 }
@@ -222,6 +234,12 @@ func (s *clientService) CreateClient(req CreateClientRequest, mekStore encryptio
 		MotionMinArea:         req.MotionMinArea,
 		MotionMaxFrames:       req.MotionMaxFrames,
 		MotionWarmUpFrames:    req.MotionWarmUpFrames,
+		MotionMinWidth:        req.MotionMinWidth,
+		MotionMinHeight:       req.MotionMinHeight,
+		MotionMinAspect:       req.MotionMinAspect,
+		MotionMaxAspect:       req.MotionMaxAspect,
+		MotionMogHistory:      req.MotionMogHistory,
+		MotionMogVarThresh:    req.MotionMogVarThresh,
 		CaptureCodec:          req.CaptureCodec,
 		CaptureFrameRate:      req.CaptureFrameRate,
 	}
@@ -302,6 +320,12 @@ func (s *clientService) UpdateClientSettings(req UpdateClientSettingsRequest) er
 	client.MotionMinArea = req.MotionMinArea
 	client.MotionMaxFrames = req.MotionMaxFrames
 	client.MotionWarmUpFrames = req.MotionWarmUpFrames
+	client.MotionMinWidth = req.MotionMinWidth
+	client.MotionMinHeight = req.MotionMinHeight
+	client.MotionMinAspect = req.MotionMinAspect
+	client.MotionMaxAspect = req.MotionMaxAspect
+	client.MotionMogHistory = req.MotionMogHistory
+	client.MotionMogVarThresh = req.MotionMogVarThresh
 	client.CaptureCodec = req.CaptureCodec
 	client.CaptureFrameRate = req.CaptureFrameRate
 	client.UpdatedAt = time.Now().UTC()

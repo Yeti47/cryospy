@@ -47,26 +47,6 @@
                     <label for="capture_frame_rate">Frame Rate (FPS)</label>
                     <input type="number" step="0.1" id="capture_frame_rate" name="capture_frame_rate" value="15.0">
                 </div>
-            </div>
-            <div class="settings-column">
-                <h4>Motion Detection</h4>
-                <div class="form-group checkbox-group">
-                    <input type="checkbox" id="motion_only" name="motion_only">
-                    <label for="motion_only">Motion Only</label>
-                </div>
-                <div class="form-group">
-                    <label for="motion_min_area">Min Area (square pixels)</label>
-                    <input type="number" id="motion_min_area" name="motion_min_area" value="1000">
-                </div>
-                <div class="form-group">
-                    <label for="motion_max_frames">Max Frames</label>
-                    <input type="number" id="motion_max_frames" name="motion_max_frames" value="300">
-                </div>
-                <div class="form-group">
-                    <label for="motion_warm_up_frames">Warm-Up Frames</label>
-                    <input type="number" id="motion_warm_up_frames" name="motion_warm_up_frames" value="30">
-                </div>
-
                 <h4>Post-Processing</h4>
                 <div class="form-group">
                     <label for="downscale_resolution">Downscale Resolution</label>
@@ -103,6 +83,49 @@
                         <option value="{{ . }}" {{ if eq . "1000k" }}selected{{ end }}>{{ . }}</option>
                         {{ end }}
                     </select>
+                </div>
+            </div>
+            <div class="settings-column">
+                <h4>Motion Detection</h4>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="motion_only" name="motion_only">
+                    <label for="motion_only">Motion Only</label>
+                </div>
+                <div class="form-group">
+                    <label for="motion_min_area">Min Area (square pixels)</label>
+                    <input type="number" id="motion_min_area" name="motion_min_area" value="1000">
+                </div>
+                <div class="form-group">
+                    <label for="motion_max_frames">Max Frames</label>
+                    <input type="number" id="motion_max_frames" name="motion_max_frames" value="300">
+                </div>
+                <div class="form-group">
+                    <label for="motion_warm_up_frames">Warm-Up Frames</label>
+                    <input type="number" id="motion_warm_up_frames" name="motion_warm_up_frames" value="30">
+                </div>
+                <div class="form-group">
+                    <label for="motion_min_width">Min Width (px)</label>
+                    <input type="number" id="motion_min_width" name="motion_min_width" value="20">
+                </div>
+                <div class="form-group">
+                    <label for="motion_min_height">Min Height (px)</label>
+                    <input type="number" id="motion_min_height" name="motion_min_height" value="20">
+                </div>
+                <div class="form-group">
+                    <label for="motion_min_aspect">Min Aspect Ratio</label>
+                    <input type="number" step="0.01" id="motion_min_aspect" name="motion_min_aspect" value="0.3">
+                </div>
+                <div class="form-group">
+                    <label for="motion_max_aspect">Max Aspect Ratio</label>
+                    <input type="number" step="0.01" id="motion_max_aspect" name="motion_max_aspect" value="3.0">
+                </div>
+                <div class="form-group">
+                    <label for="motion_mog_history">MOG2 History</label>
+                    <input type="number" id="motion_mog_history" name="motion_mog_history" value="500">
+                </div>
+                <div class="form-group">
+                    <label for="motion_mog_var_thresh">MOG2 Var Threshold</label>
+                    <input type="number" step="0.01" id="motion_mog_var_thresh" name="motion_mog_var_thresh" value="16.0">
                 </div>
             </div>
         </div>

@@ -10,9 +10,15 @@ import (
 )
 
 var DefaultMotionDetectionSettings = MotionDetectionSettings{
-	MotionMinArea:    1000, // Default minimum area of motion
-	MaxFramesToCheck: 300,  // Default maximum frames to check for motion
-	WarmUpFrames:     30,   // Default warm-up frames to skip
+	MotionMinArea:      1000, // Default minimum area of motion
+	MaxFramesToCheck:   300,  // Default maximum frames to check for motion
+	WarmUpFrames:       30,   // Default warm-up frames to skip
+	MotionMinWidth:     20,   // Default minimum width of detected motion
+	MotionMinHeight:    20,   // Default minimum height of detected motion
+	MotionMinAspect:    0.3,  // Default minimum aspect ratio
+	MotionMaxAspect:    3.0,  // Default maximum aspect ratio
+	MotionMogHistory:   500,  // Default MOG2 history parameter
+	MotionMogVarThresh: 16.0, // Default MOG2 var threshold parameter
 }
 
 type MotionDetector interface {
@@ -42,7 +48,11 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 	}
 	defer video.Close()
 
-	detector := gocv.NewBackgroundSubtractorMOG2()
+	detector := gocv.NewBackgroundSubtractorMOG2WithParams(
+		settings.MotionMogHistory,
+		settings.MotionMogVarThresh,
+		false, // disable shadow detection
+	)
 	defer detector.Close()
 
 	img := gocv.NewMat()
@@ -73,6 +83,10 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 	maxFramesToCheck := settings.MaxFramesToCheck
 	warmUpFrames := settings.WarmUpFrames
 	minArea := settings.MotionMinArea
+	minWidth := settings.MotionMinWidth
+	minHeight := settings.MotionMinHeight
+	minAspect := settings.MotionMinAspect
+	maxAspect := settings.MotionMaxAspect
 
 	if minArea <= 0 {
 		minArea = DefaultMotionDetectionSettings.MotionMinArea
@@ -82,6 +96,18 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 	}
 	if warmUpFrames < 0 {
 		warmUpFrames = DefaultMotionDetectionSettings.WarmUpFrames
+	}
+	if minWidth <= 0 {
+		minWidth = DefaultMotionDetectionSettings.MotionMinWidth
+	}
+	if minHeight <= 0 {
+		minHeight = DefaultMotionDetectionSettings.MotionMinHeight
+	}
+	if minAspect <= 0 {
+		minAspect = DefaultMotionDetectionSettings.MotionMinAspect
+	}
+	if maxAspect <= 0 {
+		maxAspect = DefaultMotionDetectionSettings.MotionMaxAspect
 	}
 
 	for frameCount < maxFramesToCheck {
@@ -131,13 +157,34 @@ func (d *GoCVMotionDetector) DetectMotion(videoPath string) (bool, error) {
 			rect := gocv.BoundingRect(contours.At(i))
 			aspectRatio := float64(rect.Dx()) / float64(rect.Dy())
 
-			if area > float64(minArea) &&
-				rect.Dx() > 20 && rect.Dy() > 20 &&
-				aspectRatio < 3.0 {
-				log.Printf("Motion Detected in Frame %d: Contour %d area = %.2f, aspectRatio = %.2f", frameCount, i, area, aspectRatio)
-				motionDetected = true
-				break
+			filtered := false
+			var filterReason string
+
+			if area <= float64(minArea) {
+				filtered = true
+				filterReason = fmt.Sprintf("area %.2f <= minArea %d", area, minArea)
+			} else if rect.Dx() <= minWidth {
+				filtered = true
+				filterReason = fmt.Sprintf("width %d <= minWidth %d", rect.Dx(), minWidth)
+			} else if rect.Dy() <= minHeight {
+				filtered = true
+				filterReason = fmt.Sprintf("height %d <= minHeight %d", rect.Dy(), minHeight)
+			} else if aspectRatio < minAspect {
+				filtered = true
+				filterReason = fmt.Sprintf("aspectRatio %.2f < minAspect %.2f", aspectRatio, minAspect)
+			} else if aspectRatio > maxAspect {
+				filtered = true
+				filterReason = fmt.Sprintf("aspectRatio %.2f > maxAspect %.2f", aspectRatio, maxAspect)
 			}
+
+			if filtered {
+				log.Printf("Motion filtered out in Frame %d: Contour %d area = %.2f, width = %d, height = %d, aspectRatio = %.2f, reason: %s", frameCount, i, area, rect.Dx(), rect.Dy(), aspectRatio, filterReason)
+				continue
+			}
+
+			log.Printf("Motion Detected in Frame %d: Contour %d area = %.2f, width = %d, height = %d, aspectRatio = %.2f", frameCount, i, area, rect.Dx(), rect.Dy(), aspectRatio)
+			motionDetected = true
+			break
 		}
 		contours.Close()
 

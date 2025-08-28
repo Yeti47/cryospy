@@ -23,9 +23,15 @@ type Client struct {
 	VideoBitRate string // Bitrate for video compression (e.g., "1000k")
 
 	// Motion detection settings
-	MotionMinArea      int // Minimum area of motion to be detected
-	MotionMaxFrames    int // Maximum number of frames to check for motion
-	MotionWarmUpFrames int // Number of frames to skip before starting motion detection
+	MotionMinArea      int     // Minimum area of motion to be detected
+	MotionMaxFrames    int     // Maximum number of frames to check for motion
+	MotionWarmUpFrames int     // Number of frames to skip before starting motion detection
+	MotionMinWidth     int     // Minimum width of motion's bounding box to be detected
+	MotionMinHeight    int     // Minimum height of motion's bounding box to be detected
+	MotionMinAspect    float64 // Minimum aspect ratio (width/height) of motion's bounding box to be detected
+	MotionMaxAspect    float64 // Maximum aspect ratio (width/height) of motion's bounding box to be detected
+	MotionMogHistory   int     // History length for MOG2 background subtractor
+	MotionMogVarThresh float64 // Variance threshold for MOG2 background subtractor
 
 	// Recording settings
 	CaptureCodec     string  // Video codec to use for raw capture (e.g., "MJPG")

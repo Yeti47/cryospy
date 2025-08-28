@@ -42,6 +42,13 @@ func createTestClient() *Client {
 		MotionOnly:            true,
 		Grayscale:             false,
 		DownscaleResolution:   "480p",
+		// New motion detection properties
+		MotionMinWidth:     22,
+		MotionMinHeight:    23,
+		MotionMinAspect:    0.5,
+		MotionMaxAspect:    2.5,
+		MotionMogHistory:   600,
+		MotionMogVarThresh: 18.0,
 	}
 }
 
@@ -104,6 +111,25 @@ func TestSQLiteClientRepository_Create(t *testing.T) {
 	if retrieved.DownscaleResolution != client.DownscaleResolution {
 		t.Errorf("Expected DownscaleResolution %s, got %s", client.DownscaleResolution, retrieved.DownscaleResolution)
 	}
+	// New motion detection properties
+	if retrieved.MotionMinWidth != client.MotionMinWidth {
+		t.Errorf("Expected MotionMinWidth %d, got %d", client.MotionMinWidth, retrieved.MotionMinWidth)
+	}
+	if retrieved.MotionMinHeight != client.MotionMinHeight {
+		t.Errorf("Expected MotionMinHeight %d, got %d", client.MotionMinHeight, retrieved.MotionMinHeight)
+	}
+	if retrieved.MotionMinAspect != client.MotionMinAspect {
+		t.Errorf("Expected MotionMinAspect %f, got %f", client.MotionMinAspect, retrieved.MotionMinAspect)
+	}
+	if retrieved.MotionMaxAspect != client.MotionMaxAspect {
+		t.Errorf("Expected MotionMaxAspect %f, got %f", client.MotionMaxAspect, retrieved.MotionMaxAspect)
+	}
+	if retrieved.MotionMogHistory != client.MotionMogHistory {
+		t.Errorf("Expected MotionMogHistory %d, got %d", client.MotionMogHistory, retrieved.MotionMogHistory)
+	}
+	if retrieved.MotionMogVarThresh != client.MotionMogVarThresh {
+		t.Errorf("Expected MotionMogVarThresh %f, got %f", client.MotionMogVarThresh, retrieved.MotionMogVarThresh)
+	}
 }
 
 func TestSQLiteClientRepository_GetByID_NotFound(t *testing.T) {
@@ -144,6 +170,12 @@ func TestSQLiteClientRepository_GetAll(t *testing.T) {
 			MotionOnly:            false,
 			Grayscale:             true,
 			DownscaleResolution:   "720p",
+			MotionMinWidth:        21,
+			MotionMinHeight:       22,
+			MotionMinAspect:       0.4,
+			MotionMaxAspect:       2.0,
+			MotionMogHistory:      550,
+			MotionMogVarThresh:    17.0,
 		},
 		{
 			ID:                    "client-2",
@@ -158,6 +190,12 @@ func TestSQLiteClientRepository_GetAll(t *testing.T) {
 			MotionOnly:            true,
 			Grayscale:             false,
 			DownscaleResolution:   "",
+			MotionMinWidth:        20,
+			MotionMinHeight:       20,
+			MotionMinAspect:       0.3,
+			MotionMaxAspect:       3.0,
+			MotionMogHistory:      500,
+			MotionMogVarThresh:    16.0,
 		},
 		{
 			ID:                    "client-3",
@@ -172,6 +210,12 @@ func TestSQLiteClientRepository_GetAll(t *testing.T) {
 			MotionOnly:            false,
 			Grayscale:             false,
 			DownscaleResolution:   "360p",
+			MotionMinWidth:        25,
+			MotionMinHeight:       26,
+			MotionMinAspect:       0.6,
+			MotionMaxAspect:       2.8,
+			MotionMogHistory:      700,
+			MotionMogVarThresh:    19.0,
 		},
 	}
 
@@ -221,6 +265,12 @@ func TestSQLiteClientRepository_Update(t *testing.T) {
 	client.MotionOnly = false
 	client.Grayscale = true
 	client.DownscaleResolution = "1080p"
+	client.MotionMinWidth = 30
+	client.MotionMinHeight = 31
+	client.MotionMinAspect = 0.7
+	client.MotionMaxAspect = 2.9
+	client.MotionMogHistory = 800
+	client.MotionMogVarThresh = 20.0
 	client.UpdatedAt = time.Now().UTC()
 
 	err = repo.Update(ctx, client)
@@ -260,6 +310,24 @@ func TestSQLiteClientRepository_Update(t *testing.T) {
 	}
 	if retrieved.DownscaleResolution != "1080p" {
 		t.Errorf("Expected updated DownscaleResolution '1080p', got %s", retrieved.DownscaleResolution)
+	}
+	if retrieved.MotionMinWidth != 30 {
+		t.Errorf("Expected updated MotionMinWidth 30, got %d", retrieved.MotionMinWidth)
+	}
+	if retrieved.MotionMinHeight != 31 {
+		t.Errorf("Expected updated MotionMinHeight 31, got %d", retrieved.MotionMinHeight)
+	}
+	if retrieved.MotionMinAspect != 0.7 {
+		t.Errorf("Expected updated MotionMinAspect 0.7, got %f", retrieved.MotionMinAspect)
+	}
+	if retrieved.MotionMaxAspect != 2.9 {
+		t.Errorf("Expected updated MotionMaxAspect 2.9, got %f", retrieved.MotionMaxAspect)
+	}
+	if retrieved.MotionMogHistory != 800 {
+		t.Errorf("Expected updated MotionMogHistory 800, got %d", retrieved.MotionMogHistory)
+	}
+	if retrieved.MotionMogVarThresh != 20.0 {
+		t.Errorf("Expected updated MotionMogVarThresh 20.0, got %f", retrieved.MotionMogVarThresh)
 	}
 	// CreatedAt should remain unchanged
 	if !retrieved.CreatedAt.Equal(client.CreatedAt) {

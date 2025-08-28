@@ -32,11 +32,11 @@
                     </div>
                     <div class="metadata-item">
                         <label>Date</label>
-                        <span>{{ (.Clip.TimeStamp | toLocal).Format "Monday, January 2, 2006" }}</span>
+                        <span id="clipDate" data-timestamp="{{ .Clip.TimeStamp }}">Loading...</span>
                     </div>
                     <div class="metadata-item">
                         <label>Time</label>
-                        <span>{{ (.Clip.TimeStamp | toLocal).Format "15:04:05 MST" }}</span>
+                        <span id="clipTime" data-timestamp="{{ .Clip.TimeStamp }}">Loading...</span>
                     </div>
                     <div class="metadata-item">
                         <label>Duration</label>
@@ -79,6 +79,22 @@
 </div>
 
 <script>
+// Format and display local date/time for clip
+function formatClipTimestamp() {
+    const dateEl = document.getElementById('clipDate');
+    const timeEl = document.getElementById('clipTime');
+    if (!dateEl || !timeEl) return;
+    const isoString = dateEl.getAttribute('data-timestamp');
+    if (!isoString) return;
+    const dateObj = new Date(isoString);
+    // Format date: e.g., Monday, January 2, 2006
+    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    // Format time: e.g., 15:04:05 MST
+    const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' };
+    dateEl.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
+    timeEl.textContent = dateObj.toLocaleTimeString(undefined, timeOptions);
+}
+document.addEventListener('DOMContentLoaded', formatClipTimestamp);
 function shareClip() {
     const url = window.location.href;
     if (navigator.clipboard) {

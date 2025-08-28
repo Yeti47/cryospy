@@ -18,6 +18,12 @@ type ClientSettingsResponse struct {
 	MotionWarmUpFrames    int     `json:"motion_warm_up_frames"`
 	CaptureCodec          string  `json:"capture_codec"`
 	CaptureFrameRate      float64 `json:"capture_frame_rate"`
+	MotionMinWidth        int     `json:"motion_min_width"`
+	MotionMinHeight       int     `json:"motion_min_height"`
+	MotionMinAspect       float64 `json:"motion_min_aspect"`
+	MotionMaxAspect       float64 `json:"motion_max_aspect"`
+	MotionMogHistory      int     `json:"motion_mog_history"`
+	MotionMogVarThresh    float64 `json:"motion_mog_var_thresh"`
 }
 
 type UploadClipRequest struct {

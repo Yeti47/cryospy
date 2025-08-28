@@ -40,6 +40,12 @@ type ClientSettingsResponse struct {
 	MotionMinArea         int     `json:"motion_min_area"`
 	MotionMaxFrames       int     `json:"motion_max_frames"`
 	MotionWarmUpFrames    int     `json:"motion_warm_up_frames"`
+	MotionMinWidth        int     `json:"motion_min_width"`
+	MotionMinHeight       int     `json:"motion_min_height"`
+	MotionMinAspect       float64 `json:"motion_min_aspect"`
+	MotionMaxAspect       float64 `json:"motion_max_aspect"`
+	MotionMogHistory      int     `json:"motion_mog_history"`
+	MotionMogVarThresh    float64 `json:"motion_mog_var_thresh"`
 	CaptureCodec          string  `json:"capture_codec"`
 	CaptureFrameRate      float64 `json:"capture_frame_rate"`
 }
@@ -79,6 +85,12 @@ func (h *ClientHandler) GetClientSettings(c *gin.Context) {
 		MotionMinArea:         client.MotionMinArea,
 		MotionMaxFrames:       client.MotionMaxFrames,
 		MotionWarmUpFrames:    client.MotionWarmUpFrames,
+		MotionMinWidth:        client.MotionMinWidth,
+		MotionMinHeight:       client.MotionMinHeight,
+		MotionMinAspect:       client.MotionMinAspect,
+		MotionMaxAspect:       client.MotionMaxAspect,
+		MotionMogHistory:      client.MotionMogHistory,
+		MotionMogVarThresh:    client.MotionMogVarThresh,
 		CaptureCodec:          client.CaptureCodec,
 		CaptureFrameRate:      client.CaptureFrameRate,
 	}

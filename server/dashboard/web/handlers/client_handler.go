@@ -95,6 +95,12 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 	motionMinAreaStr := c.PostForm("motion_min_area")
 	motionMaxFramesStr := c.PostForm("motion_max_frames")
 	motionWarmUpFramesStr := c.PostForm("motion_warm_up_frames")
+	motionMinWidthStr := c.PostForm("motion_min_width")
+	motionMinHeightStr := c.PostForm("motion_min_height")
+	motionMinAspectStr := c.PostForm("motion_min_aspect")
+	motionMaxAspectStr := c.PostForm("motion_max_aspect")
+	motionMogHistoryStr := c.PostForm("motion_mog_history")
+	motionMogVarThreshStr := c.PostForm("motion_mog_var_thresh")
 	captureCodec := c.PostForm("capture_codec")
 	captureFrameRateStr := c.PostForm("capture_frame_rate")
 
@@ -151,12 +157,39 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 		return
 	}
 
+	motionMinWidth, err := strconv.Atoi(motionMinWidthStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{"Title": "New Client", "Error": "Invalid motion min width."})
+		return
+	}
+	motionMinHeight, err := strconv.Atoi(motionMinHeightStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{"Title": "New Client", "Error": "Invalid motion min height."})
+		return
+	}
+	motionMinAspect, err := strconv.ParseFloat(motionMinAspectStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{"Title": "New Client", "Error": "Invalid motion min aspect."})
+		return
+	}
+	motionMaxAspect, err := strconv.ParseFloat(motionMaxAspectStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{"Title": "New Client", "Error": "Invalid motion max aspect."})
+		return
+	}
+	motionMogHistory, err := strconv.Atoi(motionMogHistoryStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{"Title": "New Client", "Error": "Invalid motion MOG history."})
+		return
+	}
+	motionMogVarThresh, err := strconv.ParseFloat(motionMogVarThreshStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{"Title": "New Client", "Error": "Invalid motion MOG var thresh."})
+		return
+	}
 	captureFrameRate, err := strconv.ParseFloat(captureFrameRateStr, 64)
 	if err != nil {
-		c.HTML(http.StatusBadRequest, "new-client", gin.H{
-			"Title": "New Client",
-			"Error": "Invalid capture frame rate.",
-		})
+		c.HTML(http.StatusBadRequest, "new-client", gin.H{"Title": "New Client", "Error": "Invalid capture frame rate."})
 		return
 	}
 
@@ -173,6 +206,12 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 		MotionMinArea:         motionMinArea,
 		MotionMaxFrames:       motionMaxFrames,
 		MotionWarmUpFrames:    motionWarmUpFrames,
+		MotionMinWidth:        motionMinWidth,
+		MotionMinHeight:       motionMinHeight,
+		MotionMinAspect:       motionMinAspect,
+		MotionMaxAspect:       motionMaxAspect,
+		MotionMogHistory:      motionMogHistory,
+		MotionMogVarThresh:    motionMogVarThresh,
 		CaptureCodec:          captureCodec,
 		CaptureFrameRate:      captureFrameRate,
 	}
@@ -220,6 +259,12 @@ func (h *ClientHandler) UpdateClientSettings(c *gin.Context) {
 	motionMinAreaStr := c.PostForm("motion_min_area")
 	motionMaxFramesStr := c.PostForm("motion_max_frames")
 	motionWarmUpFramesStr := c.PostForm("motion_warm_up_frames")
+	motionMinWidthStr := c.PostForm("motion_min_width")
+	motionMinHeightStr := c.PostForm("motion_min_height")
+	motionMinAspectStr := c.PostForm("motion_min_aspect")
+	motionMaxAspectStr := c.PostForm("motion_max_aspect")
+	motionMogHistoryStr := c.PostForm("motion_mog_history")
+	motionMogVarThreshStr := c.PostForm("motion_mog_var_thresh")
 	captureCodec := c.PostForm("capture_codec")
 	captureFrameRateStr := c.PostForm("capture_frame_rate")
 
@@ -276,12 +321,39 @@ func (h *ClientHandler) UpdateClientSettings(c *gin.Context) {
 		return
 	}
 
+	motionMinWidth, err := strconv.Atoi(motionMinWidthStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{"Title": "Clients", "Error": "Invalid motion min width."})
+		return
+	}
+	motionMinHeight, err := strconv.Atoi(motionMinHeightStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{"Title": "Clients", "Error": "Invalid motion min height."})
+		return
+	}
+	motionMinAspect, err := strconv.ParseFloat(motionMinAspectStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{"Title": "Clients", "Error": "Invalid motion min aspect."})
+		return
+	}
+	motionMaxAspect, err := strconv.ParseFloat(motionMaxAspectStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{"Title": "Clients", "Error": "Invalid motion max aspect."})
+		return
+	}
+	motionMogHistory, err := strconv.Atoi(motionMogHistoryStr)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{"Title": "Clients", "Error": "Invalid motion MOG history."})
+		return
+	}
+	motionMogVarThresh, err := strconv.ParseFloat(motionMogVarThreshStr, 64)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "clients", gin.H{"Title": "Clients", "Error": "Invalid motion MOG var thresh."})
+		return
+	}
 	captureFrameRate, err := strconv.ParseFloat(captureFrameRateStr, 64)
 	if err != nil {
-		c.HTML(http.StatusBadRequest, "clients", gin.H{
-			"Title": "Clients",
-			"Error": "Invalid capture frame rate.",
-		})
+		c.HTML(http.StatusBadRequest, "clients", gin.H{"Title": "Clients", "Error": "Invalid capture frame rate."})
 		return
 	}
 
@@ -298,6 +370,12 @@ func (h *ClientHandler) UpdateClientSettings(c *gin.Context) {
 		MotionMinArea:         motionMinArea,
 		MotionMaxFrames:       motionMaxFrames,
 		MotionWarmUpFrames:    motionWarmUpFrames,
+		MotionMinWidth:        motionMinWidth,
+		MotionMinHeight:       motionMinHeight,
+		MotionMinAspect:       motionMinAspect,
+		MotionMaxAspect:       motionMaxAspect,
+		MotionMogHistory:      motionMogHistory,
+		MotionMogVarThresh:    motionMogVarThresh,
 		CaptureCodec:          captureCodec,
 		CaptureFrameRate:      captureFrameRate,
 	}

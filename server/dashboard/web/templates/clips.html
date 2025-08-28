@@ -101,11 +101,11 @@
                     </div>
                     <div class="meta-item">
                         <span class="meta-label">Date:</span>
-                        <span class="meta-value">{{ (.TimeStamp | toLocal).Format "2006-01-02" }}</span>
+                        <span class="meta-value clip-date" data-timestamp="{{ .TimeStamp }}">Loading...</span>
                     </div>
                     <div class="meta-item">
                         <span class="meta-label">Time:</span>
-                        <span class="meta-value">{{ (.TimeStamp | toLocal).Format "15:04:05" }}</span>
+                        <span class="meta-value clip-time" data-timestamp="{{ .TimeStamp }}">Loading...</span>
                     </div>
                 </div>
             </div>
@@ -131,6 +131,26 @@
 {{ end }}
 
 <script>
+// Format and display local date/time for all clips
+function formatAllClipTimestamps() {
+    const dateEls = document.querySelectorAll('.clip-date');
+    const timeEls = document.querySelectorAll('.clip-time');
+    dateEls.forEach(dateEl => {
+        const isoString = dateEl.getAttribute('data-timestamp');
+        if (!isoString) return;
+        const dateObj = new Date(isoString);
+        const dateOptions = { year: 'numeric', month: '2-digit', day: '2-digit' };
+        dateEl.textContent = dateObj.toLocaleDateString(undefined, dateOptions);
+    });
+    timeEls.forEach(timeEl => {
+        const isoString = timeEl.getAttribute('data-timestamp');
+        if (!isoString) return;
+        const dateObj = new Date(isoString);
+        const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' };
+        timeEl.textContent = dateObj.toLocaleTimeString(undefined, timeOptions);
+    });
+}
+document.addEventListener('DOMContentLoaded', formatAllClipTimestamps);
 function toggleSelectAll() {
     const selectAll = document.getElementById('selectAll');
     const checkboxes = document.querySelectorAll('.clip-checkbox');

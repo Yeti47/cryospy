@@ -6,9 +6,15 @@ import (
 )
 
 type MotionDetectionSettings struct {
-	MotionMinArea    int // Minimum area of motion to be detected
-	MaxFramesToCheck int // Maximum number of frames to check for motion
-	WarmUpFrames     int // Number of frames to skip before starting motion detection
+	MotionMinArea      int     // Minimum area of motion to be detected
+	MaxFramesToCheck   int     // Maximum number of frames to check for motion
+	WarmUpFrames       int     // Number of frames to skip before starting motion detection
+	MotionMinWidth     int     // Minimum width of detected motion
+	MotionMinHeight    int     // Minimum height of detected motion
+	MotionMinAspect    float64 // Minimum aspect ratio of detected motion
+	MotionMaxAspect    float64 // Maximum aspect ratio of detected motion
+	MotionMogHistory   int     // MOG2 history parameter
+	MotionMogVarThresh float64 // MOG2 var threshold parameter
 }
 
 // MotionDetectionSettingsProvider implements SettingsProvider for MotionDetectionSettings
@@ -28,8 +34,14 @@ func (p *MotionDetectionSettingsProvider) GetSettings() MotionDetectionSettings 
 	clientSettings := p.clientSettingsProvider.GetSettings()
 
 	return MotionDetectionSettings{
-		MotionMinArea:    clientSettings.MotionMinArea,
-		MaxFramesToCheck: clientSettings.MotionMaxFrames,
-		WarmUpFrames:     clientSettings.MotionWarmUpFrames,
+		MotionMinArea:      clientSettings.MotionMinArea,
+		MaxFramesToCheck:   clientSettings.MotionMaxFrames,
+		WarmUpFrames:       clientSettings.MotionWarmUpFrames,
+		MotionMinWidth:     clientSettings.MotionMinWidth,
+		MotionMinHeight:    clientSettings.MotionMinHeight,
+		MotionMinAspect:    clientSettings.MotionMinAspect,
+		MotionMaxAspect:    clientSettings.MotionMaxAspect,
+		MotionMogHistory:   clientSettings.MotionMogHistory,
+		MotionMogVarThresh: clientSettings.MotionMogVarThresh,
 	}
 }
