@@ -22,6 +22,11 @@ CryoSpy is a privacy-focused surveillance system developed for secure self-hosti
 
 CryoSpy is available in multiple distribution formats to suit different needs:
 
+### Docker Image
+- **cryospy-server**: Single-container image bundling the capture-server and dashboard services
+- **Volume-first design**: Mount `/home/cryospy` from the host to persist the SQLite database, configuration, and session keys
+- **FFmpeg included**: Runtime image ships with FFmpeg so no additional system packages are required
+
 ### Pre-built Releases (Recommended)
 - **Linux Server**: Static binaries with installation scripts (handles FFmpeg installation)
 - **Linux Client**: AppImage with all dependencies bundled (includes FFmpeg)
@@ -123,6 +128,52 @@ The proxy authentication headers are automatically included in all API requests 
 - **Go 1.24.3** or later
 - **OpenCV 4.x** development libraries (capture client only)
 - **C/C++ compiler** (for OpenCV CGO bindings)
+
+## Docker Deployment
+
+The `cryospy-server` image packages both the capture-server API and the dashboard web UI in a single container. The image expects the CryoSpy data directory to live at `$HOME/cryospy`, which maps to `/home/cryospy/cryospy` inside the container when using the default user. All server-related Docker assets are organized under `docker/server`, leaving room for future container definitions (for example, a capture client image) beside it.
+
+### Build the image
+
+The Docker assets for the server live in `docker/server`. Build from the repository root so the Dockerfile can reach all source directories:
+
+```bash
+docker build -f docker/server/Dockerfile -t cryospy-server .
+```
+
+### Run with persistent storage
+
+Bind-mount a host directory to `/home/cryospy` to keep the SQLite database (`cryospy.db`), configuration (`config.json`), logs, and session keys persistent between container restarts.
+
+```bash
+docker run \
+  --name cryospy-server \
+  -p 8080:8080 \
+  -p 8081:8081 \
+  -v /srv/cryospy:/home/cryospy \
+  cryospy-server
+```
+
+Access the dashboard at [http://localhost:8080](http://localhost:8080), and point capture clients to `http://localhost:8081` (or the mapped host name/ports).
+
+### Optional: docker-compose example
+
+```yaml
+services:
+  cryospy-server:
+    image: cryospy-server:latest
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - /srv/cryospy:/home/cryospy
+    restart: unless-stopped
+```
+
+> **Note:** The first start will auto-generate `~/cryospy/config.json` (with `"web_addr": "0.0.0.0"` so the dashboard is reachable from your host) and `cryospy_session.txt` in the mounted volume. Adjust the configuration and restart the container to apply changes.
 
 ## Installation
 

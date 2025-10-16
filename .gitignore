@@ -88,7 +88,6 @@ yarn-error.log*
 *.zip
 
 # Docker
-.dockerignore
 Dockerfile.dev
 
 # Certificate files

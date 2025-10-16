@@ -1,0 +1,14 @@
+.git
+.gitignore
+# Limit context to server build assets
+client/
+docs/
+resources/
+scripts/
+docker/client/
+**/logs/
+**/temp/
+**/__debug_*
+*.log
+server/dashboard/dashboard
+server/capture-server/capture-server
