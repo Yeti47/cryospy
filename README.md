@@ -30,14 +30,15 @@ CryoSpy is available in multiple distribution formats to suit different needs:
 ### Pre-built Releases (Recommended)
 - **Linux Server**: Static binaries with installation scripts (handles FFmpeg installation)
 - **Linux Client**: AppImage with all dependencies bundled (includes FFmpeg)
-- **Windows**: Complete packages with installation scripts (handles FFmpeg installation)
+
+> **Note:** Windows packages are no longer part of the pre-built releases. Follow the [Building from Source](#option-2-building-from-source) instructions to produce Windows binaries.
 
 ### Building from Source
 - Full source code available for customization
 - Requires manual dependency installation
 - Recommended only for developers or advanced users
 
-**For most users, we recommend using the pre-built releases** which include installation scripts that handle all dependency management automatically.
+**For most Linux users, we recommend using the pre-built releases** which include installation scripts that handle all dependency management automatically. Windows users should follow the [Building from Source](#option-2-building-from-source) guidance instead.
 
 ## Key Features
 
@@ -179,7 +180,7 @@ services:
 
 ### Option 1: Pre-built Releases (Recommended)
 
-Pre-built releases include installation scripts that automatically handle all dependency management.
+Pre-built releases currently cover Linux targets and include installation scripts that automatically handle all dependency management. Windows users should proceed to [Option 2: Building from Source](#option-2-Openbuilding-from-Opensource).
 
 **Linux Server:**
 ```bash
@@ -208,16 +209,6 @@ chmod +x cryospy-capture-client-linux-x86_64.AppImage
 ./cryospy-capture-client-linux-x86_64.AppImage
 ```
 
-**Windows (Server and Client):**
-```powershell
-# Download and extract appropriate package
-# Run installation scripts (handle dependency management automatically)
-.\install-server-windows.ps1  # For server
-.\install-client-windows.ps1  # For client
-
-# Optional: Set up nginx reverse proxy
-.\setup-nginx-proxy.ps1 -Domain "yourdomain.com" -CertPath "C:\ssl\certs\yourdomain.com"
-```
 
 ### Option 2: Building from Source
 
@@ -267,6 +258,8 @@ $env:PKG_CONFIG_PATH = "C:\vcpkg\installed\x64-windows\lib\pkgconfig"
 $env:CGO_ENABLED = "1"
 $env:PATH += ";C:\vcpkg\installed\x64-windows\bin"
 ```
+
+> **Runtime requirement:** Ensure the OpenCV runtime DLLs (for example, the ones installed via vcpkg) are present on every Windows machine that will run the capture client. Without them, the client executable will fail to start.
 
 #### Step 2: Build Components
 
@@ -326,7 +319,8 @@ OpenCV is a runtime dependency for the capture client. The GoCV bindings require
 
 **Pre-built releases** bundle all required OpenCV libraries, so users do not need to install OpenCV themselves:
   - **Linux AppImage**: All OpenCV `.so` libraries are bundled inside the AppImage
-  - **Windows releases**: All required OpenCV `.dll` files are included in the release package
+  
+**Windows builds from source** require you to install the OpenCV `.dll` files separately (for example via vcpkg) and keep them alongside the capture client binary on the target machine.
 
 If you build the capture client from source, you need to install the OpenCV development libraries and ensure the runtime libraries are available on your system.
 
@@ -341,14 +335,9 @@ For production deployments, especially when exposing the capture-server to the i
 
 **Available Installation Scripts:**
 - `install-server-linux.sh` - Linux server installation with dependency management
-- `install-server-windows.ps1` - Windows server installation with dependency management
-- `install-client-windows.ps1` - Windows client installation and configuration
-- `setup-nginx-proxy.sh` / `setup-nginx-proxy.ps1` - Nginx reverse proxy setup
+- `setup-nginx-proxy.sh` - Nginx reverse proxy setup for Linux deployments
 
-**Example automated Windows client installation:**
-```powershell
-.\install-client-windows.ps1 -ServerUrl "https://yourdomain.com" -ClientId "camera-01" -ClientSecret "secure-secret" -ProxyAuthHeader "X-Proxy-Auth" -ProxyAuthValue "proxy-token" -InstallAsService -SetupFirewall -Force
-```
+Windows users should follow the [Building from Source](#option-2-building-from-source) instructions and adapt their own automation as needed.
 
 **Example client configuration with proxy authentication:**
 ```json

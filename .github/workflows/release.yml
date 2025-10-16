@@ -179,187 +179,8 @@ jobs:
         name: cryospy-client-linux-appimage
         path: cryospy-capture-client-linux-x86_64.AppImage
 
-  build-windows:
-    runs-on: windows-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.24'
-    
-    - name: Install Chocolatey
-      run: |
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-        
-    - name: Install FFmpeg via Chocolatey
-      run: |
-        # Install FFmpeg via Chocolatey (fast runtime dependency)
-        choco install ffmpeg -y
-        
-    - name: Cache OpenCV build
-      id: cache-opencv
-      uses: actions/cache@v4
-      with:
-        path: C:\opencv
-        key: opencv-4.12.0-gocv-windows
-        restore-keys: |
-          opencv-4.12.0-gocv-windows
-        
-    - name: Install build tools for OpenCV compilation
-      if: steps.cache-opencv.outputs.cache-hit != 'true'
-      run: |
-        # Install Git (required by gocv build script)
-        choco install git -y
-        
-        # Install Visual Studio Build Tools (required for compilation)
-        choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools" -y
-        
-    - name: Build OpenCV with contrib modules using official gocv script
-      if: steps.cache-opencv.outputs.cache-hit != 'true'
-      run: |
-        # Download and run the official gocv OpenCV build script
-        # This builds OpenCV 4.12.0 + contrib modules specifically for gocv
-        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/hybridgroup/gocv/release/win_build_opencv.cmd" -OutFile "win_build_opencv.cmd"
-        
-        Write-Host "Building OpenCV with contrib modules using official gocv script..."
-        Write-Host "This will take at least 1 hour but ensures perfect gocv compatibility..."
-        
-        # Set up minimal GOPATH structure to satisfy the script
-        $env:GOPATH = "C:\gopath"
-        New-Item -Path "C:\gopath\src\gocv.io\x\gocv" -ItemType Directory -Force | Out-Null
-        
-        # Run the build script (ignore final directory change error)
-        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "win_build_opencv.cmd" -Wait -PassThru -NoNewWindow
-        
-        # Check if OpenCV was built successfully (ignore the final chdir error)
-        if (Test-Path "C:\opencv\build") {
-          Write-Host "✅ OpenCV build completed successfully"
-        } else {
-          Write-Host "❌ OpenCV build failed - build directory not found"
-          exit 1
-        }
-        
-    - name: Verify OpenCV installation
-      run: |
-        # Verify OpenCV was either built or restored from cache
-        if (Test-Path "C:\opencv\build") {
-          Write-Host "✅ OpenCV installation found at C:\opencv\build"
-          Get-ChildItem "C:\opencv\build" -Recurse -Include "*.dll" | Select-Object -First 5 | ForEach-Object { Write-Host "  Found: $($_.Name)" }
-        } else {
-          Write-Host "❌ OpenCV installation not found!"
-          exit 1
-        }
-        
-    - name: Set environment variables
-      run: |
-        # gocv script installs OpenCV to C:\opencv, FFmpeg via Chocolatey to C:\tools\ffmpeg
-        echo "CGO_ENABLED=1" >> $env:GITHUB_ENV
-        echo "C:\opencv\build\x64\vc16\bin;C:\tools\ffmpeg\bin" >> $env:GITHUB_PATH
-        echo "OpenCV_DIR=C:\opencv\build" >> $env:GITHUB_ENV
-        
-    - name: Build capture-server
-      run: |
-        cd server/capture-server
-        go mod tidy
-        go build -tags release -ldflags "-s -w" -o capture-server.exe .
-        
-    - name: Build dashboard
-      run: |
-        cd server/dashboard
-        go mod tidy
-        go build -tags release -ldflags "-s -w" -o dashboard.exe .
-        
-    - name: Build capture-client
-      run: |
-        cd client/capture-client
-        go mod tidy
-        go build -ldflags "-s -w" -o capture-client.exe .
-        
-    - name: Package Windows server binaries
-      run: |
-        mkdir release\server-windows
-        copy server\capture-server\capture-server.exe release\server-windows\
-        copy server\dashboard\dashboard.exe release\server-windows\
-        copy server\config.example.json release\server-windows\
-        copy scripts\install-server-windows.ps1 release\server-windows\
-        copy scripts\setup-nginx-proxy.ps1 release\server-windows\
-        
-    - name: Copy DLLs to server output
-      run: |
-        # Ensure target directory exists
-        if (!(Test-Path release\server-windows)) { New-Item -ItemType Directory -Path release\server-windows | Out-Null }
-
-        Write-Host "Listing all DLLs under C:\opencv for debugging..."
-        Get-ChildItem -Path 'C:\opencv' -Recurse -Filter '*.dll' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-
-        # Copy all OpenCV DLLs from common build output directories
-        $opencvDllDirs = @('C:\opencv\build\bin', 'C:\opencv\build\install\x64\mingw\bin', 'C:\opencv\build\x64\vc16\bin')
-        foreach ($dir in $opencvDllDirs) {
-          if (Test-Path $dir) {
-            Get-ChildItem -Path $dir -Filter 'opencv_*.dll' -ErrorAction SilentlyContinue | ForEach-Object {
-              Copy-Item -Path $_.FullName -Destination 'release\server-windows\' -Force
-              Write-Host "Copied: $($_.FullName)"
-            }
-          }
-        }
-
-        # Fail early if no OpenCV DLLs were copied
-        $copied = Get-ChildItem -Path 'release\server-windows' -Filter 'opencv_*.dll' -ErrorAction SilentlyContinue
-        if (-not $copied) {
-          Write-Host "❌ No OpenCV DLLs were copied to release\server-windows. Please ensure OpenCV was built or cache restored correctly."
-          exit 1
-        }
-
-        # Copy FFmpeg DLLs from Chocolatey installation to server directory (if present)
-        if (Test-Path 'C:\tools\ffmpeg\bin') {
-          Get-ChildItem 'C:\tools\ffmpeg\bin' -Filter '*.dll' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item -Path $_.FullName -Destination 'release\server-windows\' -Force }
-        } else {
-          Write-Host "⚠️ C:\tools\ffmpeg\bin not found; skipping FFmpeg DLL copy"
-        }
-
-    - name: Package Windows client binaries
-      run: |
-        mkdir release\client-windows
-        copy client\capture-client\capture-client.exe release\client-windows\
-        copy client\capture-client\config.example.json release\client-windows\
-        copy scripts\install-client-windows.ps1 release\client-windows\
-        # Copy all OpenCV DLLs from common build output directories
-        $opencvDllDirs = @('C:\opencv\build\bin', 'C:\opencv\build\install\x64\mingw\bin', 'C:\opencv\build\x64\vc16\bin')
-        foreach ($dir in $opencvDllDirs) {
-          if (Test-Path $dir) {
-            Get-ChildItem -Path $dir -Filter 'opencv_*.dll' -ErrorAction SilentlyContinue | ForEach-Object {
-              Copy-Item -Path $_.FullName -Destination 'release\client-windows\' -Force
-              Write-Host "Copied: $($_.FullName)"
-            }
-          }
-        }
-        # Copy FFmpeg DLLs from Chocolatey installation to client directory (if present)
-        if (Test-Path 'C:\tools\ffmpeg\bin') {
-          Get-ChildItem 'C:\tools\ffmpeg\bin' -Filter '*.dll' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item -Path $_.FullName -Destination 'release\client-windows\' -Force }
-        } else {
-          Write-Host "⚠️ C:\tools\ffmpeg\bin not found; skipping FFmpeg DLL copy"
-        }
-        
-    - name: Create Windows packages
-      run: |
-        Compress-Archive -Path release\server-windows\* -DestinationPath cryospy-server-windows-amd64.zip
-        Compress-Archive -Path release\client-windows\* -DestinationPath cryospy-client-windows-amd64.zip
-        
-    - name: Upload Windows artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: cryospy-windows-amd64
-        path: |
-          cryospy-server-windows-amd64.zip
-          cryospy-client-windows-amd64.zip
-
   create-release:
-    needs: [build-linux-server, build-linux-client-appimage, build-windows]
+    needs: [build-linux-server, build-linux-client-appimage]
     runs-on: ubuntu-latest
     
     steps:
@@ -374,19 +195,15 @@ jobs:
         files: |
           cryospy-server-linux-amd64/cryospy-server-linux-amd64.tar.gz
           cryospy-client-linux-appimage/cryospy-capture-client-linux-x86_64.AppImage
-          cryospy-windows-amd64/cryospy-server-windows-amd64.zip
-          cryospy-windows-amd64/cryospy-client-windows-amd64.zip
         body: |
           ## CryoSpy Release ${{ github.ref_name }}
           
           ### Components Available
           - **Server Package (Linux)**: Contains capture-server and dashboard components
-          - **Server Package (Windows)**: Contains capture-server and dashboard components  
-          - **Client Package (Windows)**: Contains capture-client for video capture machines
           - **Client AppImage (Linux)**: Universal Linux client with all dependencies included
           
           ### Linux Installation
-          
+
           **Server Installation:**
           ```bash
           tar -xzf cryospy-server-linux-amd64.tar.gz
@@ -429,33 +246,10 @@ jobs:
           ./install-server-linux.sh --with-systemd --force
           ```
           
-          ### Windows Installation
-          
-          **Server Installation:**
-          1. Extract cryospy-server-windows-amd64.zip
-          2. Run PowerShell as Administrator
-          3. Execute: `.\install-server-windows.ps1`
-          4. For internet access: `.\setup-nginx-proxy.ps1 -Domain yourdomain.com`
-          
-          **Client Installation:**
-          1. Extract cryospy-client-windows-amd64.zip to desired location
-          2. Run PowerShell as Administrator (optional, for service installation)
-          3. Execute: `.\install-client-windows.ps1`
-          
-          **Note:** All OpenCV dependencies are bundled with the Windows release.
-          Only FFmpeg is optionally installed for advanced video processing features.
-          
-          **Automated Installation Examples:**
-          ```powershell
-          # Server with services and firewall
-          .\install-server-windows.ps1 -InstallAsService -SetupFirewall
-          
-          # Server with nginx proxy and auth
-          .\setup-nginx-proxy.ps1 -Domain "cryospy.yourdomain.com" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key"
-          
-          # Client with full configuration (FFmpeg is optional)
-          .\install-client-windows.ps1 -ServerUrl "https://cryospy.yourdomain.com" -ClientId "camera-001" -ClientSecret "secret" -ProxyAuthHeader "X-CryoSpy-Auth" -ProxyAuthValue "your-secret-key" -InstallAsService
-          ```
+          ### Windows Support
+
+          Windows binaries are not currently published via the automated release process.
+          To run CryoSpy on Windows, build from source using the instructions in the repository README.
           
           ### Configuration
           - Server configurations are automatically created during installation
@@ -482,13 +276,6 @@ jobs:
           
           # Then start normally
           ./cryospy-capture-client-linux-x86_64.AppImage
-          ```
-          
-          *Windows:*
-          ```powershell
-          # Configuration is set up during installation
-          # Just start the client after installation
-          ./capture-client.exe
           ```
           
         draft: false
