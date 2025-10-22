@@ -128,8 +128,8 @@ jobs:
         #!/bin/bash
         SELF=$(readlink -f "$0")
         HERE=${SELF%/*}
-    export PATH="${HERE}/usr/bin:${PATH}"
-    export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib64:${HERE}/usr/bin:${LD_LIBRARY_PATH}"
+        export PATH="${HERE}/usr/bin:${PATH}"
+        export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib64:${HERE}/usr/bin:${LD_LIBRARY_PATH}"
 
         # Handle special arguments
         if [ "$1" = "--configure" ]; then
