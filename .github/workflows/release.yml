@@ -200,11 +200,20 @@ jobs:
         chmod +x cryospy-capture-client-linux-x86_64.AppImage
         ./cryospy-capture-client-linux-x86_64.AppImage --help
 
-    - name: Upload Linux client AppImage
+    - name: Package AppImage with licenses
+      run: |
+        mkdir -p release/client-appimage
+        cp cryospy-capture-client-linux-x86_64.AppImage release/client-appimage/
+        cp README.md release/client-appimage/
+        cp LICENSE release/client-appimage/
+        curl -fsSL https://raw.githubusercontent.com/opencv/opencv/4.x/LICENSE -o release/client-appimage/LICENSE-OpenCV
+        tar -czf cryospy-client-linux-x86_64.tar.gz -C release/client-appimage .
+
+    - name: Upload packaged AppImage bundle
       uses: actions/upload-artifact@v4
       with:
-        name: cryospy-client-linux-appimage
-        path: cryospy-capture-client-linux-x86_64.AppImage
+        name: cryospy-client-linux-appimage-bundle
+        path: cryospy-client-linux-x86_64.tar.gz
 
   create-release:
     needs: [build-linux-server, build-linux-client-appimage]
@@ -221,13 +230,13 @@ jobs:
       with:
         files: |
           cryospy-server-linux-amd64/cryospy-server-linux-amd64.tar.gz
-          cryospy-client-linux-appimage/cryospy-capture-client-linux-x86_64.AppImage
+          cryospy-client-linux-appimage-bundle/cryospy-client-linux-x86_64.tar.gz
         body: |
           ## CryoSpy Release ${{ github.ref_name }}
           
           ### Components Available
           - **Server Package (Linux)**: Contains capture-server and dashboard components
-          - **Client AppImage (Linux)**: Universal Linux client with all dependencies included
+          - **Client AppImage Bundle (Linux)**: AppImage packaged with project documentation and OpenCV license
           
           ### Linux Installation
 
@@ -241,15 +250,17 @@ jobs:
           
           **Client Installation (AppImage):**
           ```bash
-          # Download the AppImage
-          wget https://github.com/Yeti47/cryospy/releases/download/${{ github.ref_name }}/cryospy-capture-client-linux-x86_64.AppImage
-          
-          # Make it executable
+          # Download and extract bundle
+          wget https://github.com/Yeti47/cryospy/releases/download/${{ github.ref_name }}/cryospy-client-linux-x86_64.tar.gz
+          tar -xzf cryospy-client-linux-x86_64.tar.gz
+          cd cryospy-client-linux-x86_64
+
+          # Make AppImage executable
           chmod +x cryospy-capture-client-linux-x86_64.AppImage
-          
+
           # Run configuration setup (interactive)
           ./cryospy-capture-client-linux-x86_64.AppImage --configure
-          
+
           # Or run directly (config.json must exist in current directory)
           ./cryospy-capture-client-linux-x86_64.AppImage
           ```
@@ -258,6 +269,7 @@ jobs:
           The AppImage also supports traditional installation by extracting to a directory:
           ```bash
           # Extract AppImage contents
+          cd cryospy-client-linux-x86_64
           ./cryospy-capture-client-linux-x86_64.AppImage --appimage-extract
           
           # Move to desired location
