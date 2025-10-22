@@ -49,18 +49,40 @@ jobs:
         path: cryospy-server-linux-amd64.tar.gz
 
   build-linux-client-appimage:
-    runs-on: ubuntu-latest
-    container:
-      image: fedora:latest
+    runs-on: ubuntu-20.04
     
     steps:
     - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
     
     - name: Install dependencies
       run: |
-        dnf update -y
-        dnf install -y golang gcc gcc-c++ opencv-devel pkgconf-pkg-config ffmpeg \
-                       desktop-file-utils file wget fuse fuse-libs
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          pkg-config \
+          libopencv-dev \
+          libopencv-contrib-dev \
+          ffmpeg \
+          patchelf \
+          desktop-file-utils \
+          file \
+          wget \
+          libfuse2 \
+          ca-certificates \
+          libgtk-3-dev \
+          libavcodec-dev \
+          libavformat-dev \
+          libswscale-dev \
+          libtbb-dev \
+          libopenblas-dev \
+          liblapacke-dev
+        sudo rm -rf /var/lib/apt/lists/*
     
     - name: Build capture-client
       run: |
@@ -106,8 +128,8 @@ jobs:
         #!/bin/bash
         SELF=$(readlink -f "$0")
         HERE=${SELF%/*}
-        export PATH="${HERE}/usr/bin/:${PATH}"
-        export LD_LIBRARY_PATH="${HERE}/usr/bin:${LD_LIBRARY_PATH}"
+    export PATH="${HERE}/usr/bin:${PATH}"
+    export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib64:${HERE}/usr/bin:${LD_LIBRARY_PATH}"
 
         # Handle special arguments
         if [ "$1" = "--configure" ]; then
@@ -173,6 +195,11 @@ jobs:
         echo "✅ AppImage created successfully"
         ls -la "$TARGET_APPIMAGE"
         
+    - name: Smoke test AppImage
+      run: |
+        chmod +x cryospy-capture-client-linux-x86_64.AppImage
+        ./cryospy-capture-client-linux-x86_64.AppImage --help
+
     - name: Upload Linux client AppImage
       uses: actions/upload-artifact@v4
       with:
