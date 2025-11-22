@@ -1,7 +1,7 @@
 {
   "client_id": "your-client-id",
   "client_secret": "your-client-secret",
-  "server_url": "http://localhost:8080",
+  "server_url": "http://localhost:8081",
   "camera_device": "/dev/video0",
   "buffer_size": 5,
   "settings_sync_seconds": 300,

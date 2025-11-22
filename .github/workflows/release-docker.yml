@@ -11,11 +11,21 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/cryospy-server
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image_name: cryospy-server
+            dockerfile: docker/server/Dockerfile
+            title: CryoSpy Server
+            description: Self-hosted surveillance server with bundled dashboard UI
+          - image_name: cryospy-client
+            dockerfile: docker/client/Dockerfile
+            title: CryoSpy Capture Client
+            description: GoCV-powered capture client for CryoSpy surveillance system
 
     steps:
       - name: Check out repository
@@ -35,13 +45,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}
           tags: |
             type=ref,event=tag
             type=raw,value=latest
           labels: |
-            org.opencontainers.image.title=CryoSpy Server
-            org.opencontainers.image.description=Self-hosted surveillance server with bundled dashboard UI
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
             org.opencontainers.image.authors=Yetibyte
             org.opencontainers.image.licenses=MIT
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
@@ -52,7 +62,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/server/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

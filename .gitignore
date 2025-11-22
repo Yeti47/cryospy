@@ -126,3 +126,6 @@ server/dashboard/dashboard-*test
 
 # mock uploads
 mock-uploads/
+
+# E2E Test Data
+tests/e2e/testdata/

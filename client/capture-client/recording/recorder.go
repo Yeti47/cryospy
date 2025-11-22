@@ -3,6 +3,7 @@ package recording
 import (
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -48,6 +49,21 @@ func NewGoCVRecorder(device string, clipDirectory string, provider config.Settin
 	}
 }
 
+func (r *GoCVRecorder) isRecordingFromFile() bool {
+	// Check if device is an integer (webcam index)
+	if _, err := strconv.Atoi(r.device); err == nil {
+		return false
+	}
+
+	// Check if it's a file and NOT a character device (like /dev/video0)
+	info, err := os.Stat(r.device)
+	if err != nil {
+		return false
+	}
+
+	return info.Mode()&os.ModeCharDevice == 0
+}
+
 func (r *GoCVRecorder) IsRecording() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -63,16 +79,16 @@ func (r *GoCVRecorder) StartRecording(callback RecordingCallback, errorCallback 
 	r.isRecording = true
 	r.mu.Unlock()
 
-	// Parse device ID
-	deviceID := 0
-	if r.device != "" && r.device != "0" {
-		if id, err := strconv.Atoi(r.device); err == nil {
-			deviceID = id
-		}
+	// Open webcam
+	var webcam *gocv.VideoCapture
+	var err error
+
+	if id, errConv := strconv.Atoi(r.device); errConv == nil {
+		webcam, err = gocv.OpenVideoCapture(id)
+	} else {
+		webcam, err = gocv.OpenVideoCapture(r.device)
 	}
 
-	// Open webcam
-	webcam, err := gocv.OpenVideoCapture(deviceID)
 	if err != nil {
 		r.mu.Lock()
 		r.isRecording = false
@@ -197,10 +213,22 @@ func (r *GoCVRecorder) recordNextClip(webcam *gocv.VideoCapture, clipIndex int, 
 		}
 
 		if ok := webcam.Read(&img); !ok {
-			log.Printf("Failed to read frame %d from webcam", frameCount)
-			time.Sleep(time.Millisecond * 67) // Wait a bit before retrying
-			// Don't advance nextFrameTime on failed reads
-			continue
+			// Check if we should loop (local file)
+			if r.isRecordingFromFile() {
+				log.Printf("End of file reached for %s, rewinding...", r.device)
+				// 1 is CAP_PROP_POS_FRAMES
+				webcam.Set(1, 0)
+				if ok := webcam.Read(&img); !ok {
+					log.Printf("Failed to read frame %d from webcam after rewind", frameCount)
+					time.Sleep(time.Millisecond * 67)
+					continue
+				}
+			} else {
+				log.Printf("Failed to read frame %d from webcam", frameCount)
+				time.Sleep(time.Millisecond * 67) // Wait a bit before retrying
+				// Don't advance nextFrameTime on failed reads
+				continue
+			}
 		}
 
 		if img.Empty() {

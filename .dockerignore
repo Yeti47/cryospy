@@ -2,10 +2,14 @@
 .gitignore
 # Limit context to server build assets
 client/
+!client/capture-client/
+!client/capture-client/**
 docs/
 resources/
 scripts/
+!scripts/configure-client.sh
 docker/client/
+!docker/client/entrypoint.sh
 **/logs/
 **/temp/
 **/__debug_*

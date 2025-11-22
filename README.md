@@ -18,28 +18,6 @@ CryoSpy is a privacy-focused surveillance system developed for secure self-hosti
 
 **⚠️ Important:** This software is intended for lawful home security purposes only. The developers do not condone or support the use of this software for non-consensual monitoring, invasion of privacy, or any other illegal activities.
 
-## Distribution Methods
-
-CryoSpy is available in multiple distribution formats to suit different needs:
-
-### Docker Image
-- **cryospy-server**: Single-container image bundling the capture-server and dashboard services
-- **Volume-first design**: Mount `/home/cryospy` from the host to persist the SQLite database, configuration, and session keys
-- **FFmpeg included**: Runtime image ships with FFmpeg so no additional system packages are required
-
-### Pre-built Releases (Recommended)
-- **Linux Server**: Static binaries with installation scripts (handles FFmpeg installation)
-- **Linux Client**: AppImage with all dependencies bundled (includes FFmpeg)
-
-> **Note:** Windows packages are no longer part of the pre-built releases. Follow the [Building from Source](#option-2-building-from-source) instructions to produce Windows binaries.
-
-### Building from Source
-- Full source code available for customization
-- Requires manual dependency installation
-- Recommended only for developers or advanced users
-
-**For most Linux users, we recommend using the pre-built releases** which include installation scripts that handle all dependency management automatically. Windows users should follow the [Building from Source](#option-2-building-from-source) guidance instead.
-
 ## Key Features
 
 - **🔒 End-to-End Encryption**: All video data is encrypted at rest using AES-GCM encryption
@@ -84,105 +62,162 @@ A web-based administration interface designed for local access on the host syste
 - Settings management for all clients
 - Intended for local network access; public internet exposure strongly discouraged for security
 
-## Security Features
-
-- **Master Encryption Key (MEK)**: Password-protected master key for data encryption
-- **Per-Client MEK Encryption**: Each capture device has its own secret used to re-encrypt the global MEK
-- **Secure Authentication**: Basic authentication with encrypted client secrets
-- **Data Encryption**: All video data encrypted at rest using AES-GCM with the global MEK
-- **Session Management**: Secure web sessions for dashboard access
-- **Proxy Authentication**: Optional custom header authentication for reverse proxy deployments
-- **Proxy Security**: Configurable trusted proxy settings for production deployments
-- **HTTPS Ready**: Designed to work with reverse proxies for HTTPS termination
-
-### Defense-in-Depth Authentication
-
-CryoSpy supports a layered authentication approach for enhanced security:
-
-1. **Application Layer**: Standard Basic Authentication using client credentials
-2. **Proxy Layer**: Optional custom header authentication for reverse proxies
-
-This dual-layer approach is particularly valuable for internet-exposed deployments where additional security barriers are essential. The proxy authentication layer can be configured independently from the application authentication, allowing for flexible security policies.
-
-**Configuration Example:**
-```json
-{
-  "proxy_auth_header": "X-Proxy-Auth",
-  "proxy_auth_value": "secure-proxy-token-12345"
-}
-```
-
-The proxy authentication headers are automatically included in all API requests when configured, providing seamless integration with nginx, Apache, or other reverse proxy solutions that support custom authentication headers.
-
-> **Note**: In CryoSpy, a "client" refers to a capture device (end device running the capture-client application), not a user or browser session.
-
-## Quick Start
+## Getting Started
 
 ### Prerequisites
 
-**Runtime Dependencies (All Deployments):**
-- **FFmpeg**: Required for all CryoSpy components (video processing)
-- **SQLite**: Bundled with Go SQLite driver
-- **Webcam devices**: For capture clients
+**Hardware:**
+- A server or PC to host the backend (Linux recommended)
+- One or more devices with cameras (webcams, USB cameras) to act as clients
 
-**Build Dependencies (Source Builds Only):**
-- **Go 1.24.3** or later
-- **OpenCV 4.x** development libraries (capture client only)
-- **C/C++ compiler** (for OpenCV CGO bindings)
+**Software:**
+- **Docker** (Recommended): The easiest way to run both server and client components.
+- **FFmpeg**: Required on the host machine if running binaries directly (not needed for Docker).
 
-## Docker Deployment
+### Quick Setup Guide (Docker)
 
-The `cryospy-server` image packages both the capture-server API and the dashboard web UI in a single container. The image expects the CryoSpy data directory to live at `$HOME/cryospy`, which maps to `/home/cryospy/cryospy` inside the container when using the default user. All server-related Docker assets are organized under `docker/server`, leaving room for future container definitions (for example, a capture client image) beside it.
+This guide covers setting up a production-ready CryoSpy server using Docker, Nginx, and Let's Encrypt SSL, followed by a Docker-based client setup.
 
-### Build the image
+#### 1. Server Setup (Docker + Nginx + SSL)
 
-The Docker assets for the server live in `docker/server`. Build from the repository root so the Dockerfile can reach all source directories:
+**Start CryoSpy Server**
 
-```bash
-docker build -f docker/server/Dockerfile -t cryospy-server .
-```
-
-### Run with persistent storage
-
-Bind-mount a host directory to `/home/cryospy` to keep the SQLite database (`cryospy.db`), configuration (`config.json`), logs, and session keys persistent between container restarts.
-
-```bash
-docker run \
-  --name cryospy-server \
-  -p 8080:8080 \
-  -p 8081:8081 \
-  -v /srv/cryospy:/home/cryospy \
-  cryospy-server
-```
-
-Access the dashboard at [http://localhost:8080](http://localhost:8080), and point capture clients to `http://localhost:8081` (or the mapped host name/ports).
-
-### Optional: docker-compose example
+Create a `docker-compose.yml` file:
 
 ```yaml
 services:
   cryospy-server:
-    image: cryospy-server:latest
-    build:
-      context: .
-      dockerfile: docker/server/Dockerfile
-    ports:
-      - "8080:8080"
-      - "8081:8081"
-    volumes:
-      - /srv/cryospy:/home/cryospy
+    image: ghcr.io/yeti47/cryospy-server:latest
+    container_name: cryospy-server
     restart: unless-stopped
+    ports:
+      - "8080:8080"           # Dashboard (Direct access, e.g., http://local-ip:8080)
+      - "127.0.0.1:8081:8081" # Capture API (Proxied via Nginx only)
+    volumes:
+      - ./data:/home/cryospy
 ```
 
-> **Note:** The first start will auto-generate `~/cryospy/config.json` (with `"web_addr": "0.0.0.0"` so the dashboard is reachable from your host) and `cryospy_session.txt` in the mounted volume. Adjust the configuration and restart the container to apply changes.
+Start the server:
+```bash
+mkdir -p cryospy/data
+cd cryospy
+# Save the above yaml to docker-compose.yml
+docker compose up -d
+```
 
-## Installation
+**Configure Nginx**
 
-### Option 1: Pre-built Releases (Recommended)
+Install Nginx and Certbot:
+```bash
+sudo apt update
+sudo apt install nginx certbot python3-certbot-nginx
+```
 
-Pre-built releases currently cover Linux targets and include installation scripts that automatically handle all dependency management. Windows users should proceed to [Option 2: Building from Source](#option-2-Openbuilding-from-Opensource).
+Create a new configuration file `/etc/nginx/conf.d/cryospy.conf` (replace `yourdomain.com` with your actual domain):
 
-**Linux Server:**
+```nginx
+# Rate limiting zones
+limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=upload:10m rate=2r/s;
+
+server {
+    listen 80;
+    server_name yourdomain.com;
+    
+    # Redirect all HTTP traffic to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com;
+
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+
+    # SSL configuration will be managed by Certbot
+    # ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+
+    # Dashboard (Web UI) - Blocked in Nginx
+    # Access directly via http://your-server-ip:8080 on LAN
+    location / {
+        return 403 "Access denied.";
+        add_header Content-Type text/plain;
+    }
+
+    # Capture Server API (for Clients)
+    location /capture-server/ {
+        # Apply rate limiting for uploads
+        limit_req zone=upload burst=10 nodelay;
+
+        # Optional: Proxy Authentication (Defense-in-Depth)
+        # Uncomment to require a secret header from clients (recommended)
+        # Replace "your-secure-proxy-token" with a strong secret
+        # if ($http_x_proxy_auth != "your-secure-proxy-token") {
+        #     return 401 "Unauthorized";
+        # }
+
+        # Increase timeout and body size for video uploads
+        client_max_body_size 100M;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+
+        proxy_pass http://127.0.0.1:8081/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Security headers for API
+        add_header X-Robots-Tag "noindex, nofollow";
+    }
+}
+```
+
+> **Security Tip:** Uncomment the proxy authentication block in the Nginx config above to add an extra layer of security. If enabled, you must also configure `proxy_auth_header` ("X-Proxy-Auth") and `proxy_auth_value` ("your-secure-proxy-token") in your client's `config.json`.
+
+**Enable SSL**
+
+Run Certbot to obtain a certificate and automatically configure SSL:
+```bash
+sudo certbot --nginx -d yourdomain.com
+```
+
+Certbot automatically sets up a scheduled task for certificate renewal. You can test automatic renewal with:
+```bash
+sudo certbot renew --dry-run
+```
+
+The Capture API is now accessible at `https://yourdomain.com/capture-server/api/`. Note that the root URL `https://yourdomain.com` will return "Access denied" for security. The dashboard is accessible locally at `http://<server-ip>:8080`. Clients should be configured with `server_url: "https://yourdomain.com/capture-server"`.
+
+#### 2. Client Setup (Docker)
+
+Run the capture client on your camera-equipped device:
+
+```bash
+# 1. Create configuration directory
+mkdir -p client-config
+
+# 2. Create config.json inside client-config/
+# (Copy the client configuration from the Dashboard "Clients" page)
+
+# 3. Run the container
+docker run -d \
+  --name cryospy-client \
+  --restart unless-stopped \
+  --device /dev/video0:/dev/video0 \
+  -v $(pwd)/client-config:/config \
+  ghcr.io/yeti47/cryospy-client:latest
+```
+
+### Alternative: Linux Server Binaries
+
+If you prefer not to use Docker for the server, we provide pre-built binaries for Linux.
+
 ```bash
 # Download and extract
 wget https://github.com/Yeti47/cryospy/releases/latest/download/cryospy-server-linux-amd64.tar.gz
@@ -192,163 +227,9 @@ cd cryospy-server-linux-amd64
 # Install with automatic dependency management
 chmod +x install-server-linux.sh
 ./install-server-linux.sh --with-systemd
-
-# Optional: Set up nginx reverse proxy
-chmod +x setup-nginx-proxy.sh
-./setup-nginx-proxy.sh --domain yourdomain.com --email admin@yourdomain.com
 ```
 
-**Linux Client (AppImage):**
-```bash
-# Download AppImage (all dependencies bundled)
-wget https://github.com/Yeti47/cryospy/releases/latest/download/cryospy-capture-client-linux-x86_64.AppImage
-chmod +x cryospy-capture-client-linux-x86_64.AppImage
-
-# Configure and run
-./cryospy-capture-client-linux-x86_64.AppImage --configure
-./cryospy-capture-client-linux-x86_64.AppImage
-```
-
-
-### Option 2: Building from Source
-
-**Only recommended for developers or users requiring customization.**
-
-#### Step 1: Install Development Dependencies
-
-**Linux (Ubuntu/Debian):**
-```bash
-# Runtime dependencies
-sudo apt update
-sudo apt install -y ffmpeg
-
-# Build dependencies
-sudo apt install -y build-essential pkg-config
-
-# For capture client: OpenCV with contrib modules
-sudo apt install -y libopencv-dev libopencv-contrib-dev
-```
-
-**Note:** Ubuntu/Debian's OpenCV packages may lack some contrib modules. If you encounter ArUco-related errors, consider using the pre-built AppImage or building OpenCV from source with contrib modules.
-
-**Linux (Fedora/RHEL):**
-```bash
-# Runtime dependencies
-sudo dnf install -y ffmpeg
-
-# Build dependencies
-sudo dnf install -y gcc gcc-c++ pkgconf-pkg-config
-
-# For capture client: OpenCV with contrib modules (included by default)
-sudo dnf install -y opencv-devel
-```
-
-**Windows:**
-```powershell
-# Install FFmpeg via Chocolatey
-choco install ffmpeg
-
-# Install OpenCV via vcpkg
-git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-C:\vcpkg\bootstrap-vcpkg.bat
-C:\vcpkg\vcpkg.exe install opencv[contrib]:x64-windows
-
-# Set environment variables
-$env:PKG_CONFIG_PATH = "C:\vcpkg\installed\x64-windows\lib\pkgconfig"
-$env:CGO_ENABLED = "1"
-$env:PATH += ";C:\vcpkg\installed\x64-windows\bin"
-```
-
-> **Runtime requirement:** Ensure the OpenCV runtime DLLs (for example, the ones installed via vcpkg) are present on every Windows machine that will run the capture client. Without them, the client executable will fail to start.
-
-#### Step 2: Build Components
-
-```bash
-# Clone repository
-git clone https://github.com/Yeti47/cryospy.git
-cd cryospy
-
-# Build server components (no OpenCV required)
-cd server/capture-server
-go mod tidy
-go build -tags release -ldflags "-s -w" -o capture-server .
-
-cd ../dashboard
-go mod tidy
-go build -tags release -ldflags "-s -w" -o dashboard .
-
-# Build capture client (requires OpenCV)
-cd ../../client/capture-client
-go mod tidy
-go build -ldflags "-s -w" -o capture-client .
-```
-
-#### Step 3: Configure and Run
-
-```bash
-# Create configuration
-mkdir -p ~/cryospy
-cp server/config.example.json ~/cryospy/config.json
-# Edit ~/cryospy/config.json with your settings
-
-# Start services
-./server/capture-server/capture-server &
-./server/dashboard/dashboard &
-
-# Access dashboard at http://localhost:8080
-# Create your first client through the web interface
-```
-
-## Dependency Details
-
-### FFmpeg Requirement
-
-FFmpeg is required on **all machines** running CryoSpy components because:
-- CryoSpy spawns `ffmpeg` as external processes for video processing
-- Cannot be bundled as a DLL/library - must be installed as executable
-- Must be available in system PATH or same directory as CryoSpy binaries
-
-**Installation:**
-- **Linux**: `sudo apt install ffmpeg` or `sudo dnf install ffmpeg`
-- **Windows**: `choco install ffmpeg` or download from ffmpeg.org
-- **Linux AppImage**: Already bundled, no separate installation needed
-
-### OpenCV Requirement
-
-OpenCV is a runtime dependency for the capture client. The GoCV bindings require the OpenCV shared libraries (Linux: `.so` files, Windows: `.dll` files) to be present at runtime.
-
-**Pre-built releases** bundle all required OpenCV libraries, so users do not need to install OpenCV themselves:
-  - **Linux AppImage**: All OpenCV `.so` libraries are bundled inside the AppImage
-  
-**Windows builds from source** require you to install the OpenCV `.dll` files separately (for example via vcpkg) and keep them alongside the capture client binary on the target machine.
-
-If you build the capture client from source, you need to install the OpenCV development libraries and ensure the runtime libraries are available on your system.
-
-### Production Deployment
-
-For production deployments, especially when exposing the capture-server to the internet:
-
-1. **Use release builds** with `-tags release` for optimized performance
-2. **Configure reverse proxy** (nginx/Apache) for HTTPS termination
-3. **Enable proxy authentication** for defense-in-depth security
-4. **Use provided automation scripts** in the `scripts/` directory
-
-**Available Installation Scripts:**
-- `install-server-linux.sh` - Linux server installation with dependency management
-- `setup-nginx-proxy.sh` - Nginx reverse proxy setup for Linux deployments
-
-Windows users should follow the [Building from Source](#option-2-building-from-source) instructions and adapt their own automation as needed.
-
-**Example client configuration with proxy authentication:**
-```json
-{
-  "client_id": "camera-01",
-  "client_secret": "secure-client-secret",
-  "server_url": "https://yourdomain.com",
-  "proxy_auth_header": "X-Proxy-Auth",
-  "proxy_auth_value": "your-secure-proxy-token"
-}
-```
+> **Note:** The client is **only** distributed as a Docker image. If you need a standalone binary for the client (e.g., for Windows), you must build it from source.
 
 ## Configuration
 
@@ -409,50 +290,13 @@ The server uses a JSON configuration file. By default, it's located at `~/cryosp
 
 The `trusted_proxies` configuration is important for production deployments behind reverse proxies or load balancers. This setting controls which proxy IP addresses are trusted to provide real client IP information through headers like `X-Forwarded-For`.
 
-```json
-{
-  "trusted_proxies": {
-    "capture_server": ["192.168.1.10", "10.0.0.5"],
-    "dashboard": []
-  }
-}
-```
-
 **Configuration Guidelines:**
 - **Capture Server**: Usually needs proxy configuration when deployed behind nginx/Apache for internet access
 - **Dashboard**: Often accessed locally, so empty array `[]` is most secure
 - **Development Builds**: Trust all proxies by default (no restrictions)
 - **Production Builds**: Only trust explicitly configured proxy IPs
 
-**Common Deployment Scenarios:**
-
-1. **Capture server behind nginx, dashboard local-only:**
-   ```json
-   "trusted_proxies": {
-     "capture_server": ["192.168.1.10"],  // nginx server IP
-     "dashboard": []                       // no proxies (most secure)
-   }
-   ```
-
-2. **Both services behind load balancer:**
-   ```json
-   "trusted_proxies": {
-     "capture_server": ["10.0.0.5"],     // load balancer IP
-     "dashboard": ["10.0.0.5"]           // same load balancer
-   }
-   ```
-
-3. **Direct internet access (no proxies):**
-   ```json
-   "trusted_proxies": {
-     "capture_server": [],               // don't trust any proxy headers
-     "dashboard": []                     // don't trust any proxy headers
-   }
-   ```
-
 > **Security Note**: Incorrectly configured trusted proxies can allow IP spoofing. Only add proxy IPs that you control and trust.
-
-> **Related Feature**: For additional security when using reverse proxies, consider configuring **proxy authentication** in your capture clients. This adds a second layer of authentication at the proxy level, complementing the trusted proxy IP configuration. See the [Client Configuration](#client-configuration) section for details on proxy authentication headers.
 
 ### Client Configuration
 Each capture client uses a local JSON configuration file:
@@ -485,55 +329,8 @@ CryoSpy includes intelligent retry logic for handling temporary server outages:
 - **`buffer_size`** (default: 5): Number of clips to buffer for immediate upload
 - **`retry_buffer_size`** (default: 100): Number of failed clips to buffer for retry during server outages
 
-**Example retry configurations:**
-
-**Retries disabled:**
-```json
-{
-  "upload_max_retries": 0
-}
-```
-
-**Extended retry for unreliable connections:**
-```json
-{
-  "upload_retry_minutes": 10,
-  "upload_max_retries": 5,
-  "retry_buffer_size": 200
-}
-```
-
-**Default behavior (retries enabled):**
-```json
-{
-  "upload_retry_minutes": 5,
-  "upload_max_retries": 3,
-  "retry_buffer_size": 100
-}
-```
-
-During server outages, failed uploads are automatically retried after the configured delay. If all retries are exhausted, the video files are automatically cleaned up to prevent disk space accumulation.
-
 #### Optional Proxy Authentication
-The `proxy_auth_header` and `proxy_auth_value` fields enable additional authentication when your capture-server is deployed behind a reverse proxy (such as nginx) that requires custom authentication headers. This provides a defense-in-depth security model:
-
-- **Application-level authentication**: Standard Basic Auth using `client_id` and `client_secret`
-- **Proxy-level authentication**: Custom header authentication for the reverse proxy layer
-
-**Common use cases:**
-- nginx reverse proxy with custom authentication headers
-- Load balancers requiring specific authentication tokens
-- Additional security layer for internet-exposed deployments
-
-**Example nginx configuration with proxy auth:**
-```nginx
-# In your nginx server block
-if ($http_x_proxy_auth != "your-proxy-secret") {
-    return 401 "Unauthorized - Invalid proxy authentication";
-}
-```
-
-Leave these fields empty (`""`) if you're not using proxy authentication.
+The `proxy_auth_header` and `proxy_auth_value` fields enable additional authentication when your capture-server is deployed behind a reverse proxy (such as nginx) that requires custom authentication headers. This provides a defense-in-depth security model.
 
 ## Video Streaming
 
@@ -551,14 +348,6 @@ CryoSpy includes a powerful live streaming feature that allows real-time viewing
 2. Select a client from the dropdown
 3. Optionally set a reference time for historical playback
 4. Click "Start Streaming" to begin viewing
-
-### Streaming Configuration
-Configure streaming settings in the server configuration:
-- **Resolution**: Target video resolution (default: 480p)
-- **Bitrate**: Video compression bitrate (default: 1000k)
-- **Codec**: Video codec for transcoding (default: libx264)
-- **Cache**: Enable/disable segment caching for performance
-- **Look-ahead**: Number of clips to pre-process for smooth streaming
 
 ## Email Notifications
 
@@ -585,59 +374,14 @@ CryoSpy includes several security features for managing camera clients:
 #### Automatic Client Disabling
 When `auth_event_settings.auto_disable_threshold` is configured, clients will be automatically disabled after exceeding the specified number of authentication failures within the time window. This helps protect against brute force attacks and misconfigured clients.
 
-Example configuration:
-```json
-{
-  "auth_event_settings": {
-    "time_window_minutes": 60,
-    "auto_disable_threshold": 10,
-    "notification_recipient": "admin@example.com",
-    "notification_threshold": 5,
-    "min_interval_minutes": 30
-  }
-}
-```
+## Development & Building from Source
 
-Set `auto_disable_threshold` to `0` to disable this feature.
-
-#### Authentication Event Configuration
-All authentication-related settings are unified under `auth_event_settings`:
-
-- `time_window_minutes`: Time window for counting authentication failures
-- `auto_disable_threshold`: Number of failures that trigger automatic client disabling (0 to disable)
-- `notification_recipient`: Email address for notifications (empty string to disable)
-- `notification_threshold`: Number of failures that trigger notifications (0 to disable)
-- `min_interval_minutes`: Minimum time between notifications for rate limiting
-
-**Configuration Examples:**
-
-**Notifications only** (no auto-disable):
-```json
-{
-  "auth_event_settings": {
-    "time_window_minutes": 60,
-    "auto_disable_threshold": 0,
-    "notification_recipient": "admin@example.com",
-    "notification_threshold": 5,
-    "min_interval_minutes": 30
-  }
-}
-```
-
-**Auto-disable only** (no notifications):
-```json
-{
-  "auth_event_settings": {
-    "time_window_minutes": 60,
-    "auto_disable_threshold": 10,
-    "notification_recipient": "",
-    "notification_threshold": 0,
-    "min_interval_minutes": 0
-  }
-}
-```
-
-## Development
+### Tech Stack
+- **Language**: Go 1.24+
+- **Web Framework**: Gin
+- **Database**: SQLite (with WAL mode)
+- **Video Processing**: FFmpeg, OpenCV (GoCV)
+- **Containerization**: Docker
 
 ### Project Structure
 ```
@@ -654,45 +398,34 @@ cryospy/
 ```
 
 ### Building from Source
+
+**Only recommended for developers or users requiring customization (e.g., Windows clients).**
+
+#### Prerequisites
+- **Go 1.24.3** or later
+- **FFmpeg**: Must be installed and in PATH.
+- **OpenCV 4.x**: Required for the capture client.
+  - **Linux**: Install `libopencv-dev` (Debian/Ubuntu) or `opencv-devel` (Fedora).
+  - **Windows**: Install via `vcpkg` (`vcpkg install opencv[contrib]:x64-windows`). Ensure DLLs are in PATH or alongside the binary.
+
+#### Build Commands
 ```bash
-# Build all components with available VS Code tasks
-# Or build manually:
-
-# Development builds (debug mode)
-cd server/capture-server && go build -o capture-server .
-cd server/dashboard && go build -o dashboard .
-cd client/capture-client && go build -o capture-client .
-
-# Production builds (release mode)
+# Build server components (no OpenCV required)
 cd server/capture-server && go build -tags release -o capture-server .
 cd server/dashboard && go build -tags release -o dashboard .
-# Note: capture-client doesn't use build tags
+
+# Build capture client (requires OpenCV)
+cd client/capture-client && go build -o capture-client .
 ```
-
-#### Build Modes
-
-**Debug Mode (Development):**
-- Default build without tags
-- Gin runs in debug mode with verbose logging
-- Trusts all proxy headers (permissive for development)
-- Includes all debugging middleware
-
-**Release Mode (Production):**
-- Built with `-tags release`
-- Gin runs in release mode (optimized, minimal logging)
-- Only trusts explicitly configured proxy IPs from config
-- Minimal middleware for better performance
 
 ### Running Tests
 ```bash
 # Run all tests
 go test ./...
 
-# Run server core tests only
-go test ./server/core/...
-
-# Run capture client tests only
-go test ./client/capture-client/...
+# Run End-to-End (E2E) tests
+# Note: Requires Docker and Docker Compose
+go test -v ./tests/e2e/...
 ```
 
 ## Troubleshooting
@@ -707,28 +440,13 @@ sudo usermod -a -G video $USER  # logout/login required
 ffmpeg -f v4l2 -i /dev/video0 -t 5 test.mp4
 ```
 
-### Dependency Issues
-
-**Pre-built releases:** No dependency installation required! Installation scripts handle everything automatically.
-
-**Building from source:**
-```bash
-# Linux: Install OpenCV development packages
-sudo apt install libopencv-dev pkg-config  # Ubuntu/Debian
-sudo dnf install opencv-devel pkgconf-pkg-config  # Fedora
-
-# All platforms: Ensure FFmpeg is installed and in PATH
-ffmpeg -version  # Should show version information
-```
-
 ### Common Problems
 - **Camera in use**: Kill other processes using the camera with provided scripts in `scripts/` directory
 - **FFmpeg errors**: Ensure FFmpeg is installed and accessible in PATH
 - **Database locked**: Check for multiple server instances running
 - **Upload failures**: Verify client credentials and server connectivity
 - **Missing DLLs on Windows**: Ensure you extracted the complete release package
-- **ArUco module errors**: When building from source, ensure OpenCV is compiled with contrib modules. Install `libopencv-contrib-dev` (Ubuntu/Debian) or use `opencv-devel` on Fedora/RHEL (includes contrib modules by default), or build OpenCV from source with `-DOPENCV_EXTRA_MODULES_PATH=/path/to/opencv_contrib/modules`. For easier setup, consider using pre-built releases.
-- **Codec issues**: On some Linux distributions, use "libopenh264" instead of "libx264" in configuration
+- **ArUco module errors**: When building from source, ensure OpenCV is compiled with contrib modules.
 
 ## Contributing
 
