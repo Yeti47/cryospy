@@ -120,6 +120,11 @@ Create a new configuration file `/etc/nginx/conf.d/cryospy.conf` (replace `yourd
 limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
 limit_req_zone $binary_remote_addr zone=upload:10m rate=2r/s;
 
+# Upstream for capture-server
+upstream capture_server {
+    server 127.0.0.1:8081;
+}
+
 server {
     listen 80;
     server_name yourdomain.com;
@@ -166,7 +171,7 @@ server {
         proxy_connect_timeout 10s;
         proxy_send_timeout 300s;
 
-        proxy_pass http://127.0.0.1:8081/;
+        proxy_pass http://capture_server/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -174,6 +179,22 @@ server {
         
         # Security headers for API
         add_header X-Robots-Tag "noindex, nofollow";
+    }
+
+    # Health check endpoint
+    location = /health {
+        limit_req zone=api burst=5 nodelay;
+        
+        # Optional: Proxy Authentication
+        # if ($http_x_proxy_auth != "your-secure-proxy-token") {
+        #     return 401 "Unauthorized";
+        # }
+        
+        proxy_pass http://capture_server;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```

@@ -274,7 +274,7 @@ $proxy_auth_config
     }
     
     # API endpoints for clip upload (requires authentication)
-    location /api/ {
+    location /capture-server/ {
         # Apply rate limiting for uploads
         limit_req zone=upload burst=10 nodelay;
 $proxy_auth_config
@@ -285,7 +285,7 @@ $proxy_auth_config
         proxy_connect_timeout 10s;
         proxy_send_timeout 300s;
         
-        proxy_pass http://capture_server;
+        proxy_pass http://capture_server/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -533,7 +533,7 @@ main() {
     echo -e "${YELLOW}Next steps:${NC}"
     echo "1. Ensure your CryoSpy capture-server is running on port $CAPTURE_SERVER_PORT"
     echo "2. Your capture-server API is now available at:"
-    echo -e "   ${CYAN}https://$DOMAIN/api/${NC}"
+    echo -e "   ${CYAN}https://$DOMAIN/capture-server/${NC}"
     echo -e "   ${CYAN}https://$DOMAIN/health${NC}"
     
     if [[ -n "$PROXY_AUTH_HEADER" && -n "$PROXY_AUTH_VALUE" ]]; then
