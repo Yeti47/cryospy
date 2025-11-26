@@ -5,11 +5,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/yeti47/cryospy/server/core/ccc/logging"
@@ -96,8 +102,45 @@ func TestE2E(t *testing.T) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Docker Compose failed: %v", err)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start Docker Compose: %v", err)
+	}
+
+	// Wait for the video duration (40s) plus a buffer, then stop the client
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			// If it exits early with an error, fail the test
+			t.Fatalf("Docker Compose exited unexpectedly: %v", err)
+		}
+	case <-time.After(45 * time.Second):
+		// Verify that clips were uploaded and are visible in the dashboard
+		t.Log("Verifying clips in dashboard...")
+		if err := verifyClips(t); err != nil {
+			t.Errorf("Verification failed: %v", err)
+		}
+
+		t.Log("Test duration reached. Stopping Docker Compose...")
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+			t.Fatalf("Failed to send interrupt signal: %v", err)
+		}
+
+		// Wait for graceful shutdown
+		select {
+		case err := <-done:
+			// Expect clean exit or check error if necessary
+			if err != nil {
+				t.Logf("Docker Compose exited with error after signal (expected): %v", err)
+			}
+		case <-time.After(30 * time.Second):
+			t.Fatal("Docker Compose failed to stop gracefully")
+			cmd.Process.Kill()
+		}
 	}
 }
 
@@ -148,7 +191,7 @@ func setupEnvironment(serverDataDir, clientConfigDir string) error {
 	req := clients.CreateClientRequest{
 		ID:                    clientID,
 		StorageLimitMegabytes: 1024,
-		ClipDurationSeconds:   60,
+		ClipDurationSeconds:   30,
 		MotionOnly:            false,
 		Grayscale:             false,
 		OutputFormat:          "mp4",
@@ -220,7 +263,7 @@ func setupEnvironment(serverDataDir, clientConfigDir string) error {
 func generateTestVideo(path string) error {
 	// Check if ffmpeg is available
 	if _, err := exec.LookPath("ffmpeg"); err == nil {
-		cmd := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=duration=70:size=640x480:rate=15", "-c:v", "libopenh264", "-pix_fmt", "yuv420p", path)
+		cmd := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=duration=40:size=640x480:rate=15", "-c:v", "libopenh264", "-pix_fmt", "yuv420p", path)
 		return cmd.Run()
 	}
 
@@ -232,6 +275,86 @@ func generateTestVideo(path string) error {
 	}
 	filename := filepath.Base(path)
 
-	cmd := exec.Command("docker", "run", "--rm", "-v", fmt.Sprintf("%s:/out", absPath), "jrottenberg/ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=duration=70:size=640x480:rate=15", "-c:v", "libx264", "-pix_fmt", "yuv420p", fmt.Sprintf("/out/%s", filename))
+	cmd := exec.Command("docker", "run", "--rm", "-v", fmt.Sprintf("%s:/out", absPath), "jrottenberg/ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=duration=40:size=640x480:rate=15", "-c:v", "libx264", "-pix_fmt", "yuv420p", fmt.Sprintf("/out/%s", filename))
 	return cmd.Run()
+}
+
+func verifyClips(t *testing.T) error {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return fmt.Errorf("failed to create cookie jar: %w", err)
+	}
+
+	client := &http.Client{
+		Jar:     jar,
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// 1. Login
+	loginURL := "http://localhost:8080/auth/login"
+	data := url.Values{}
+	data.Set("password", "test-password")
+
+	resp, err := client.PostForm(loginURL, data)
+	if err != nil {
+		return fmt.Errorf("failed to login: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("login failed with status: %d", resp.StatusCode)
+	}
+
+	// Check for cookies
+	cookies := jar.Cookies(resp.Request.URL)
+	if len(cookies) == 0 {
+		// Try getting cookies from response directly if jar didn't catch them (though it should have)
+		cookies = resp.Cookies()
+		if len(cookies) == 0 {
+			return fmt.Errorf("no cookies received after login")
+		}
+	}
+
+	// 2. Get Clips
+	clipsURL := "http://localhost:8080/clips"
+	req, err := http.NewRequest("GET", clipsURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Manually add cookies because cookiejar filters Secure cookies on http://localhost
+	// and the server sets Secure; SameSite=None by default
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get clips: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Read body for debugging
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("get clips failed with status: %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+	bodyString := string(bodyBytes)
+
+	// 3. Check for clips
+	// We look for "clip_" which is the prefix for clip filenames
+	if !strings.Contains(bodyString, "clip_") {
+		return fmt.Errorf("no clips found in dashboard response")
+	}
+
+	t.Log("Successfully verified clips in dashboard")
+	return nil
 }

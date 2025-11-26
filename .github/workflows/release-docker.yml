@@ -13,7 +13,22 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  test-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run E2E Tests
+        run: go test -v ./tests/e2e
+
   publish:
+    needs: test-e2e
     runs-on: ubuntu-latest
     strategy:
       matrix:
