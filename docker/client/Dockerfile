@@ -37,8 +37,6 @@ RUN chmod +x /usr/local/bin/capture-client \
     /usr/local/bin/configure-client.sh \
     /usr/local/bin/entrypoint.sh
 
-# Persist configuration, logs, and temporary buffers outside the container lifecycle.
-VOLUME ["/config"]
 
 # Default device path can be overridden at runtime if needed.
 ENV CAMERA_DEVICE=/dev/video0
