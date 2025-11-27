@@ -106,6 +106,24 @@ func TestE2E(t *testing.T) {
 		t.Fatalf("Failed to start Docker Compose: %v", err)
 	}
 
+	// Wait for server to be ready
+	t.Log("Waiting for server to be ready...")
+	for i := range 60 {
+		resp, err := http.Get("http://localhost:8080/health")
+		if err == nil && resp.StatusCode == 200 {
+			resp.Body.Close()
+			t.Log("Server is ready")
+			break
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		time.Sleep(1 * time.Second)
+		if i >= 59 {
+			t.Fatal("Server did not become ready within 60 seconds")
+		}
+	}
+
 	// Wait for the video duration (40s) plus a buffer, then stop the client
 	done := make(chan error, 1)
 	go func() {
@@ -118,7 +136,7 @@ func TestE2E(t *testing.T) {
 			// If it exits early with an error, fail the test
 			t.Fatalf("Docker Compose exited unexpectedly: %v", err)
 		}
-	case <-time.After(45 * time.Second):
+	case <-time.After(50 * time.Second):
 		// Verify that clips were uploaded and are visible in the dashboard
 		t.Log("Verifying clips in dashboard...")
 		if err := verifyClips(t); err != nil {
