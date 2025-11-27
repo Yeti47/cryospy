@@ -120,9 +120,10 @@ func TestE2E(t *testing.T) {
 		t.Fatalf("Failed to start Docker Compose: %v", err)
 	}
 
-	// Wait for server to be ready
+	// Wait for server to be ready (longer timeout for CI environments where builds take time)
 	t.Log("Waiting for server to be ready...")
-	for i := range 60 {
+	serverReadyTimeout := 180 // 3 minutes to account for Docker build time in CI
+	for i := range serverReadyTimeout {
 		resp, err := http.Get("http://localhost:8080/auth/login")
 		if err == nil && resp.StatusCode == 200 {
 			resp.Body.Close()
@@ -133,8 +134,8 @@ func TestE2E(t *testing.T) {
 			resp.Body.Close()
 		}
 		time.Sleep(1 * time.Second)
-		if i >= 59 {
-			t.Fatal("Server did not become ready within 60 seconds")
+		if i >= serverReadyTimeout-1 {
+			t.Fatalf("Server did not become ready within %d seconds", serverReadyTimeout)
 		}
 	}
 
