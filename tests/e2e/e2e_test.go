@@ -109,7 +109,7 @@ func TestE2E(t *testing.T) {
 	// Wait for server to be ready
 	t.Log("Waiting for server to be ready...")
 	for i := range 60 {
-		resp, err := http.Get("http://localhost:8080/health")
+		resp, err := http.Get("http://localhost:8080/auth/login")
 		if err == nil && resp.StatusCode == 200 {
 			resp.Body.Close()
 			t.Log("Server is ready")
