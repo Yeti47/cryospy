@@ -6,6 +6,9 @@ CONFIG_FILE=${CONFIG_FILE:-${CONFIG_DIR}/config.json}
 DEFAULT_CONFIG_TEMPLATE=/app/config/config.example.json
 DEFAULT_CONFIG_TARGET="${CONFIG_DIR}/config.example.json"
 
+# Maximum wait time for config file (in seconds)
+CONFIG_WAIT_TIMEOUT=${CONFIG_WAIT_TIMEOUT:-10}
+
 mkdir -p "${CONFIG_DIR}"
 mkdir -p "${CONFIG_DIR}/logs"
 mkdir -p "${CONFIG_DIR}/temp"
@@ -20,6 +23,14 @@ if [[ "${1:-}" == "--configure" ]]; then
   cd "${CONFIG_DIR}"
   exec /usr/local/bin/configure-client.sh "$@"
 fi
+
+# Wait for config file to appear (useful when volume is mounted with config from host)
+waited=0
+while [ ! -f "${CONFIG_FILE}" ] && [ "$waited" -lt "$CONFIG_WAIT_TIMEOUT" ]; do
+  echo "⏳ Waiting for config file at ${CONFIG_FILE}... (${waited}s/${CONFIG_WAIT_TIMEOUT}s)"
+  sleep 1
+  waited=$((waited + 1))
+done
 
 if [ ! -f "${CONFIG_FILE}" ]; then
   echo "❌ config.json not found at ${CONFIG_FILE}"

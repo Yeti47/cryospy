@@ -95,7 +95,21 @@ func TestE2E(t *testing.T) {
 		t.Fatalf("Failed to generate test video: %v", err)
 	}
 
-	// 3. Run Docker Compose
+	// 3. Sync filesystem to ensure all files are flushed before Docker starts
+	t.Log("Syncing filesystem...")
+	syncCmd := exec.Command("sync")
+	if err := syncCmd.Run(); err != nil {
+		t.Logf("Warning: sync command failed (may be unavailable): %v", err)
+	}
+
+	// Verify the client config exists before starting Docker
+	clientConfigPath := filepath.Join(clientConfigDir, "config.json")
+	if _, err := os.Stat(clientConfigPath); os.IsNotExist(err) {
+		t.Fatalf("Client config file does not exist at %s before Docker starts", clientConfigPath)
+	}
+	t.Logf("Client config verified at %s", clientConfigPath)
+
+	// 4. Run Docker Compose
 	t.Log("Starting Docker Compose...")
 	cmd := exec.Command("docker", "compose", "up", "--build", "--abort-on-container-exit")
 	// Stream output to stdout so we can see it in test logs
@@ -251,8 +265,13 @@ func setupEnvironment(serverDataDir, clientConfigDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal client config: %w", err)
 	}
-	if err := os.WriteFile(configPath, cfgBytes, 0o600); err != nil {
+	if err := os.WriteFile(configPath, cfgBytes, 0o644); err != nil {
 		return fmt.Errorf("failed to write client config: %w", err)
+	}
+
+	// Verify the config file was written successfully
+	if _, err := os.Stat(configPath); err != nil {
+		return fmt.Errorf("config file not created: %w", err)
 	}
 
 	// Server Config
