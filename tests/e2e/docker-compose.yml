@@ -5,6 +5,7 @@ services:
     build:
       context: ../../
       dockerfile: docker/server/Dockerfile
+    user: root
     ports:
       - "8080:8080"
       - "8081:8081"
