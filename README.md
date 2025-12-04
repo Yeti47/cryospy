@@ -91,11 +91,13 @@ services:
     container_name: cryospy-server
     restart: unless-stopped
     ports:
-      - "8080:8080"           # Dashboard (Direct access, e.g., http://local-ip:8080)
+      - "127.0.0.1:8080:8080" # Dashboard (Local access only - NEVER expose to internet)
       - "127.0.0.1:8081:8081" # Capture API (Proxied via Nginx only)
     volumes:
       - ./data:/home/cryospy
 ```
+
+> **⚠️ Security Warning:** The dashboard port (8080) is bound to `127.0.0.1` to prevent external access. Docker bypasses UFW/iptables rules, so binding to localhost is the only reliable way to block internet access. To access the dashboard from your LAN, use SSH port forwarding: `ssh -L 8080:localhost:8080 user@server-ip`, then open `http://localhost:8080` in your browser.
 
 Start the server:
 ```bash
@@ -147,7 +149,7 @@ server {
     # ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
 
     # Dashboard (Web UI) - Blocked in Nginx
-    # Access directly via http://your-server-ip:8080 on LAN
+    # Access via SSH port forwarding: ssh -L 8080:localhost:8080 user@server
     location / {
         default_type text/plain;
         return 403 "Access denied.";
@@ -217,7 +219,7 @@ Certbot automatically sets up a scheduled task for certificate renewal. You can 
 sudo certbot renew --dry-run
 ```
 
-The Capture API is now accessible at `https://yourdomain.com/capture-server/api/`. Note that the root URL `https://yourdomain.com` will return "Access denied" for security. The dashboard is accessible locally at `http://<server-ip>:8080`. Clients should be configured with `server_url: "https://yourdomain.com/capture-server"`.
+The Capture API is now accessible at `https://yourdomain.com/capture-server/api/`. Note that the root URL `https://yourdomain.com` will return "Access denied" for security. The dashboard is accessible via SSH port forwarding: `ssh -L 8080:localhost:8080 user@server-ip`, then open `http://localhost:8080` in your browser. Clients should be configured with `server_url: "https://yourdomain.com/capture-server"`.
 
 #### 2. Client Setup (Docker)
 
