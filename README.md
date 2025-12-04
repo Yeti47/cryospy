@@ -161,6 +161,7 @@ server {
         # Optional: Proxy Authentication (Defense-in-Depth)
         # Uncomment to require a secret header from clients (recommended)
         # Replace "your-secure-proxy-token" with a strong secret
+        # default_type text/plain;
         # if ($http_x_proxy_auth != "your-secure-proxy-token") {
         #     return 401 "Unauthorized";
         # }
@@ -186,6 +187,7 @@ server {
         limit_req zone=api burst=5 nodelay;
         
         # Optional: Proxy Authentication
+        # default_type text/plain;
         # if ($http_x_proxy_auth != "your-secure-proxy-token") {
         #     return 401 "Unauthorized";
         # }
