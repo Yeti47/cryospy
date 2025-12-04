@@ -149,8 +149,8 @@ server {
     # Dashboard (Web UI) - Blocked in Nginx
     # Access directly via http://your-server-ip:8080 on LAN
     location / {
+        default_type text/plain;
         return 403 "Access denied.";
-        add_header Content-Type text/plain;
     }
 
     # Capture Server API (for Clients)
@@ -200,6 +200,8 @@ server {
 ```
 
 > **Security Tip:** Uncomment the proxy authentication block in the Nginx config above to add an extra layer of security. If enabled, you must also configure `proxy_auth_header` ("X-Proxy-Auth") and `proxy_auth_value` ("your-secure-proxy-token") in your client's `config.json`.
+
+> **Note:** If certbot fails with SSL configuration errors, temporarily comment out the entire HTTPS (port 443) server block, run certbot, then uncomment it and reload nginx.
 
 **Enable SSL**
 
