@@ -115,6 +115,9 @@ sudo apt update
 sudo apt install nginx certbot python3-certbot-nginx
 ```
 
+> [!IMPORTANT]
+> The nginx front end faces the internet, so keep it patched. nginx Open Source up to 1.30.6 and 1.31.0–1.31.8 has critical vulnerabilities in its HTTP/2 module (CVE-2026-123007, CVE-2026-123633) and in SSL request-body handling (CVE-2026-118899), and the configuration below enables HTTP/2. Use nginx 1.30.7 / 1.31.9 or later, or a distribution package that includes the fix (check your distribution's security advisories), and run `sudo apt update && sudo apt upgrade nginx` on existing servers. `scripts/setup-nginx-proxy.sh` and `scripts/install-server-docker.sh` install nginx only if it is missing; they never upgrade an existing installation.
+
 Create a new configuration file `/etc/nginx/conf.d/cryospy.conf` (replace `yourdomain.com` with your actual domain):
 
 ```nginx
